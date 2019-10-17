@@ -1,0 +1,9 @@
+{
+  "training_file_name": "xclara",
+  "training_file_extension": "csv",
+  "nr_of_training_files": 3,
+  "tolerance": 0.01,
+  "k_clusters": 5,
+  "bucket_name": "test123dataset",
+  "training_batch_size": 100
+}
