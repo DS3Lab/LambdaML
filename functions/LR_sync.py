@@ -1,76 +1,157 @@
-import os
-import json
+import time
 import urllib.parse
-import boto3
 import logging
 import numpy as np
 
+import torch
+from torch.autograd import Variable
+from torch.utils.data.sampler import SubsetRandomSampler
+
 from s3.list_objects import list_bucket_objects
-from s3.get_object import get_object
+from s3.get_object import get_object, get_object_or_wait
+from s3.put_object import put_object
+from sync.sync_grad import merge_w_b_grads, get_merged_w_b_grad, put_merged_w_b_grad
 
 from model.LogisticRegression import LogisticRegression
+from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from sync.sync_meta import SyncMeta
 
-tmp_bucket = "tmp-updates"
-num_workers = 2
-model_bucket = ""
+# lambda setting
+grad_bucket = "tmp-grads"
+model_bucket = "tmp-updates"
+local_dir = "/tmp"
+w_prefix = "w_"
+b_prefix = "b_"
+w_grad_prefix = "w_grad_"
+b_grad_prefix = "b_grad_"
+
+# algorithm setting
+num_features = 150
+num_classes = 2
+learning_rate = 0.1
+batch_size = 10
+num_epochs = 1
+validation_ratio = .2
+shuffle_dataset = True
+random_seed = 42
 
 
 def handler(event, context):
+    startTs = time.time()
     bucket = event['Records'][0]['s3']['bucket']['name']
     key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
 
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
 
-    # download file
-    file = get_object(bucket, key).read().decode('utf-8')
-    print(file)
+    key_splits = key.split("_")
+    worker_index = int(key_splits[0])
+    num_worker = int(key_splits[1])
+    sync_meta = SyncMeta(worker_index, num_worker)
+    print("synchronization meta {}".format(sync_meta.__str__()))
 
-    # Set up logging
-    # logging.basicConfig(level=logging.INFO, format='%(message)s')
+    # read file from s3
+    file = get_object(bucket, key).read().decode('utf-8').split("\n")
+    dataset = DenseLibsvmDataset2(file, num_features)
 
-    sum_w = np.zeros([2, 3])
-    tmp_path = weight_path = '/tmp/'
+    # Creating data indices for training and validation splits:
+    dataset_size = len(dataset)
+    indices = list(range(dataset_size))
+    split = int(np.floor(validation_ratio * dataset_size))
+    if shuffle_dataset:
+        np.random.seed(random_seed)
+        np.random.shuffle(indices)
+    train_indices, val_indices = indices[split:], indices[:split]
 
-    s_3 = boto3.client('s3')
+    # Creating PT data samplers and loaders:
+    train_sampler = SubsetRandomSampler(train_indices)
+    valid_sampler = SubsetRandomSampler(val_indices)
 
-    # Retrieve the bucket's objects
-    # objects = list_bucket_objects(tmp_bucket)
-    # if objects is not None:
-    #     # List the object names
-    #     print('Objects in {}'.format(tmp_bucket))
-    #     for obj in objects:
-    #         file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
-    #         print('file:  {}'.format(file_key))
-    #         s_3.download_file(tmp_bucket, file_key, tmp_path + str(file_key))
-    #         w = np.loadtxt(tmp_path + str(file_key))
-    #         sum_w = sum_w + w
-    #     print(sum_w)
-    # else:
-    #     # Didn't get any keys
-    #     print('No objects in {}'.format(tmp_bucket))
+    train_loader = torch.utils.data.DataLoader(dataset,
+                                               batch_size=batch_size,
+                                               sampler=train_sampler)
+    validation_loader = torch.utils.data.DataLoader(dataset,
+                                                    batch_size=batch_size,
+                                                    sampler=valid_sampler)
 
+    print("read data cost {} s".format(time.time() - startTs))
 
-if __name__ == '__main__':
+    model = LogisticRegression(num_features, num_classes)
 
-    bucket = "agaricus"
-    key = "agaricus_127d_train.libsvm"
+    # Loss and Optimizer
+    # Softmax is internally computed.
+    # Set parameters to be updated.
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
-    print('bucket = {}'.format(bucket))
-    print('key = {}'.format(key))
+    # Training the Model
+    for epoch in range(num_epochs):
+        for batch_index, (items, labels) in enumerate(train_loader):
+            print("------epoch {} batch {}------".format(epoch, batch_index))
+            batch_start = time.time()
+            items = Variable(items.view(-1, num_features))
+            labels = Variable(labels)
 
-    objects = list_bucket_objects(bucket)
-    if objects is not None:
-        # List the object names
-        logging.info(f'Objects in {bucket}')
-        for obj in objects:
-            logging.info(f'  {obj["Key"]}')
-    else:
-        # Didn't get any keys
-        logging.info(f'No objects in {bucket}')
+            # Forward + Backward + Optimize
+            optimizer.zero_grad()
+            outputs = model(items)
+            loss = criterion(outputs, labels)
+            loss.backward()
 
-    # download file
-    file = get_object(bucket, key)
-    body = file.read().decode('utf-8')
-    print("body of file:")
-    print(file)
+            print("forward and backward cost {} s".format(time.time()-batch_start))
+
+            w_grad = model.linear.weight.grad.data.numpy()
+            b_grad = model.linear.bias.grad.data.numpy()
+            #print("dtype of grad = {}".format(w_grad.dtype))
+            print("w_grad before merge = {}".format(w_grad[0][0:5]))
+            print("b_grad before merge = {}".format(b_grad))
+
+            sync_start = time.time()
+            put_object(grad_bucket, w_grad_prefix + str(worker_index), w_grad.tobytes())
+            put_object(grad_bucket, b_grad_prefix + str(worker_index), b_grad.tobytes())
+
+            file_postfix = "{}_{}".format(epoch, batch_index)
+            if worker_index == 0:
+                w_grad_merge, b_grad_merge = \
+                    merge_w_b_grads(grad_bucket, num_worker, w_grad.dtype,
+                                    w_grad.shape, b_grad.shape,
+                                    w_grad_prefix, b_grad_prefix)
+                put_merged_w_b_grad(model_bucket, w_grad_merge, b_grad_merge,
+                                    file_postfix, w_grad_prefix, b_grad_prefix)
+                model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
+                model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
+            else:
+                w_grad_merge, b_grad_merge = get_merged_w_b_grad(model_bucket, file_postfix,
+                                                                 w_grad.dtype, w_grad.shape, b_grad.shape,
+                                                                 w_grad_prefix, b_grad_prefix)
+                model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
+                model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
+
+            print("w_grad after merge = {}".format(model.linear.weight.grad.data.numpy()[0][:5]))
+            print("b_grad after merge = {}".format(model.linear.bias.grad.data.numpy()))
+
+            print("synchronization cost {} s".format(time.time() - sync_start))
+
+            optimizer.step()
+
+            print("batch cost {} s".format(time.time() - batch_start))
+
+            if (batch_index + 1) % 100 == 0:
+                print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
+                      % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
+
+    # Test the Model
+    correct = 0
+    total = 0
+    for items, labels in validation_loader:
+        items = Variable(items.view(-1, num_features))
+        # items = Variable(items)
+        outputs = model(items)
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum()
+
+    print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
+
+    endTs = time.time()
+    print("elapsed time = {} ms".format(endTs - startTs))

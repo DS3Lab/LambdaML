@@ -11,6 +11,7 @@
 # language governing permissions and limitations under the License.
 
 import logging
+import time
 import boto3
 from botocore.exceptions import ClientError
 
@@ -33,6 +34,28 @@ def get_object(bucket_name, object_name):
         return None
     # Return an open StreamingBody object
     return response['Body']
+
+
+def get_object_or_wait(bucket_name, object_name, sleep_time):
+    """Retrieve an object from an Amazon S3 bucket
+
+    :param bucket_name: string
+    :param object_name: string
+    :param sleep_time: float
+    :return: botocore.response.StreamingBody object. If error, return None.
+    """
+
+    # Retrieve the object
+    s3 = boto3.client('s3')
+
+    while True:
+        try:
+            response = s3.get_object(Bucket=bucket_name, Key=object_name)
+            # Return an open StreamingBody object
+            return response['Body']
+        except ClientError as e:
+            # AllAccessDisabled error == bucket or object not found
+            time.sleep(sleep_time)
 
 
 def main():

@@ -97,12 +97,3 @@ def handler(event, context):
     else:
         # Didn't get any keys
         print('No objects in {}'.format(update_bucket))
-
-    # Retrieve the object
-    # stream = get_object(test_bucket_name, test_object_name)
-    # if stream is not None:
-    #     # Read first chunk of the object's contents into memory as bytes
-    #     data = stream.read(amt=1024)
-
-    #     # Output object's beginning characters
-    #     logging.info(f'{test_object_name}: {data[:60]}...')
