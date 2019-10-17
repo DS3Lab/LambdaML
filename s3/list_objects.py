@@ -15,6 +15,7 @@ import sys
 import boto3
 from botocore.exceptions import ClientError
 
+
 def list_bucket_objects(bucket_name):
     """List the objects in an Amazon S3 bucket
 

@@ -8,9 +8,9 @@ from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from s3.list_objects import list_bucket_objects
-from s3.get_object import get_object, get_object_or_wait
+from s3.get_object import get_object
 from s3.put_object import put_object
-from sync.sync_grad import merge_w_b_grads, get_merged_w_b_grad, put_merged_w_b_grad
+from sync.sync_grad import *
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
@@ -29,8 +29,8 @@ b_grad_prefix = "b_grad_"
 num_features = 150
 num_classes = 2
 learning_rate = 0.1
-batch_size = 10
-num_epochs = 1
+batch_size = 100
+num_epochs = 2
 validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
@@ -52,8 +52,13 @@ def handler(event, context):
 
     # read file from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
-    dataset = DenseLibsvmDataset2(file, num_features)
+    print("read data cost {} s".format(time.time() - startTs))
 
+    parse_start = time.time()
+    dataset = DenseLibsvmDataset2(file, num_features)
+    print("parse data cost {} s".format(time.time() - parse_start))
+
+    preprocess_start = time.time()
     # Creating data indices for training and validation splits:
     dataset_size = len(dataset)
     indices = list(range(dataset_size))
@@ -74,7 +79,7 @@ def handler(event, context):
                                                     batch_size=batch_size,
                                                     sampler=valid_sampler)
 
-    print("read data cost {} s".format(time.time() - startTs))
+    print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
     model = LogisticRegression(num_features, num_classes)
 
@@ -87,7 +92,7 @@ def handler(event, context):
     # Training the Model
     for epoch in range(num_epochs):
         for batch_index, (items, labels) in enumerate(train_loader):
-            print("------epoch {} batch {}------".format(epoch, batch_index))
+            print("------worker {} epoch {} batch {}------".format(worker_index, epoch, batch_index))
             batch_start = time.time()
             items = Variable(items.view(-1, num_features))
             labels = Variable(labels)
@@ -118,6 +123,7 @@ def handler(event, context):
                                     w_grad_prefix, b_grad_prefix)
                 put_merged_w_b_grad(model_bucket, w_grad_merge, b_grad_merge,
                                     file_postfix, w_grad_prefix, b_grad_prefix)
+                delete_expired_w_b(model_bucket, epoch, batch_index, w_grad_prefix, b_grad_prefix)
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
             else:
@@ -136,9 +142,13 @@ def handler(event, context):
 
             print("batch cost {} s".format(time.time() - batch_start))
 
-            if (batch_index + 1) % 100 == 0:
+            if (batch_index + 1) % 10 == 0:
                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
                       % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
+
+    if worker_index == 0:
+        clear_bucket(model_bucket)
+        clear_bucket(grad_bucket)
 
     # Test the Model
     correct = 0
@@ -154,4 +164,4 @@ def handler(event, context):
     print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
 
     endTs = time.time()
-    print("elapsed time = {} ms".format(endTs - startTs))
+    print("elapsed time = {} s".format(endTs - startTs))
