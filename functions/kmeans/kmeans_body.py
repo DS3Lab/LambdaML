@@ -3,6 +3,7 @@ import numpy as np
 import boto3
 import logging
 
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -40,7 +41,48 @@ def update_intermediate_result(s3, intermediate_result, bucket_name, file_name):
 	s3.put_object(Body=str.encode(tmp), Bucket=bucket_name, Key=file_name)
 
 
-def s3_check(s3, bucket_name, file_name, nr_workers, current_iter, current_cent, nth):
+def sync_result_multiple_files(s3, bucket_subfolder_name, current_iter, current_cent, nth):
+	"""
+	Synchronize results from [nr_workers] files under bucket_subfolder_name.
+	The nth file stores:
+		epoch
+		centroid_from_worker_n
+	Iterate through each file and check whether
+	"""
+	nth_worker_result = f"{current_iter}\n{current_cent}"
+	centroids_vec_list = []
+	s3.put_object(Body=str.encode(nth_worker_result), Bucket=bucket_subfolder_name, Key=nth)
+	response = s3.list_objects_v2(Bucket=bucket_subfolder_name)
+	for object in response['Contents']:
+		# still not safe since other workers might try to modify the file at the same time
+		if object['Key'] == "avg":
+			continue
+		file = s3.get_object(Bucket=bucket_name, Key=object['Key'])
+		body = file['Body'].read().decode().split("\n")
+		epoch, centroid = body[0], body[1]
+		if (epoch < current_iter):
+			# other workers have not yet updated the result for this epoch
+			return (False, current_cent)
+		else:
+			centroids_vec_list.append(centroid)
+	# all workers have updated the result for this epoch
+	avg_centroids = avg_centroids(centroids_vec_list)
+	avg_result = f"{current_iter}\n{avg_centroids}"
+	s3.put_object(Body=str.encode(avg_result), Bucket=bucket_subfolder_name, Key="avg")
+	return (True, avg_centroids)
+
+
+def sync_result_single_file(s3, bucket_name, file_name, nr_workers, current_iter, current_cent, nth):
+	"""
+	Synchronize intermediate result from a single file which stores:
+		count
+		epoch
+		centroid_from_worker_1
+		centroid_from_worker_2
+		...
+		centroid_from_worker_n
+		average_centroid_of_last_iteration
+	"""
 	s3_object = s3.get_object(Bucket=bucket_name, Key=file_name)
 	body = s3_object['Body'].read().decode()
 	intermediate_result = body.split("\n")
@@ -50,7 +92,6 @@ def s3_check(s3, bucket_name, file_name, nr_workers, current_iter, current_cent,
 		intermediate_result[nth-2] = current_cent
 		update_intermediate_result(s3, intermediate_result, bucket_name, file_name)
 		return True, intermediate_result[nr_workers+1]
-
 	elif (iteration < current_iter): # current process has already finished [iteration]-th sync
 		if (count == nr_workers) : # others are ready
 			# update the iteration and clear the count
@@ -72,10 +113,8 @@ def s3_check(s3, bucket_name, file_name, nr_workers, current_iter, current_cent,
 
 
 def lambda_handler(event, context):
-	nth = event["nth_worker"]
-	nr_workers = event["nr_workers"]
 	tolerance = event['tolerance']
-	X = event['X'].split("\n")
+	X = event['X'].split("\n") # X: training data. Need to agree on the format in the future
 	c = [i.split(",") for i in event['centroids_vec']]
 	centroids_vec = np.asarray(c, dtype=float)
 	error = 10000
@@ -83,6 +122,7 @@ def lambda_handler(event, context):
 	iter = 1
 	batch = event["training_batch_size"]
 	file_name = "kmeans_intermediate_result.txt"
+	bucket_subfolder_name = f"{event['bucket_name']}/kmeans_intermediate"
 
 	data = [s.split(",") for s in X[1:] if s != '']
 	np_data = np.array(data, dtype=float)
@@ -90,15 +130,15 @@ def lambda_handler(event, context):
 	cluster_label_vec = [0 for i in range(len(X))]
 
 	row, column = np_data.shape
-	logger.info("{} rows and {} columns.".format(row, column))
+	logger.info(f"{row} rows and {column} columns.")
 
 	while (error > tolerance):
 		if (iter % batch == 0):
 			current_iter = int(iter/batch) # starts from 1
 			success = False
 			while (not success):
-				success, centroids_vec = s3_check(s3, event['bucket_name'], file_name,
-												nr_workers, current_iter, centroids_vec, nth)
+				success, centroids_vec = sync_result_multiple_files(s3, bucket_subfolder_name,
+																current_iter, centroids_vec, event["nth_worker"])
 
 		error, X, centroids_vec = find_nearest_cluster(np_data, centroids_vec)
 		iter += 1
