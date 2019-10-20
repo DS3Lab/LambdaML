@@ -15,12 +15,16 @@ class SparseLibsvmDataset(Dataset):
         self.max_dim = max_dim
         self.ins_list = []
         self.label_list = []
+        self.ins_list_np = []
+        self.label_list_np = []
         with open(txt_path, 'r') as f:
             lines = f.readlines()
             for line in lines:
                 ins = self.parse_line(line)
                 self.ins_list.append(ins[0])
+                self.ins_list_np.append(ins[0].numpy())
                 self.label_list.append(ins[1])
+                self.label_list_np.append(ins[1])
 
     def parse_line(self, line):
         splits = line.split()
@@ -55,12 +59,16 @@ class DenseLibsvmDataset(Dataset):
         self.max_dim = max_dim
         self.ins_list = []
         self.label_list = []
+        self.ins_list_np = []
+        self.label_list_np = []
         with open(txt_path, 'r') as f:
             lines = f.readlines()
             for line in lines:
                 ins = self.parse_line(line)
                 self.ins_list.append(ins[0])
+                self.ins_list_np.append(ins[0].numpy())
                 self.label_list.append(ins[1])
+                self.label_list_np.append(ins[1])
 
     def parse_line(self, line):
         splits = line.split()
@@ -90,12 +98,16 @@ class DenseLibsvmDataset2(Dataset):
         self.max_dim = max_dim
         self.ins_list = []
         self.label_list = []
+        self.ins_list_np = []
+        self.label_list_np = []
         for line in lines:
             line = line.strip("\n")
             ins = self.parse_line(line)
             if ins is not None:
                 self.ins_list.append(ins[0])
+                self.ins_list_np.append(ins[0].numpy())
                 self.label_list.append(ins[1])
+                self.label_list_np.append(ins[1])
 
     def parse_line(self, line):
         splits = line.split()
