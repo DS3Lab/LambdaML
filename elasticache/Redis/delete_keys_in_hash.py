@@ -15,11 +15,12 @@ import redis
 from botocore.exceptions import ClientError
 
 
-def delete_keys(endpoint, keys):
-    """delete the keys in configured redis
+def delete_keys_in_hash(endpoint, key, fields):
+    """delete the fields within hash key in configured redis
     
     :param endpoint: string
-    :param keys: list of strings
+    :param key: string
+    :param fields: list of strings
     :return: True if the reference objects were deleted, otherwise False 
     """
     
@@ -29,9 +30,9 @@ def delete_keys(endpoint, keys):
     
     try:
          
-         while len(keys)>0:
-             r.delete(keys[-1])
-             keys.pop()
+         while len(fields)>0:
+             r.hdel(key, fields[-1])
+             fields.pop()
     except ClinetError as e:
         # AllAccessDisabled error == endpoint not found
         logging.error(e)

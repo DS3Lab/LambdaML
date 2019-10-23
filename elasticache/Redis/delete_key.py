@@ -15,8 +15,8 @@ import redis
 from botocore.exceptions import ClientError
 
 
-def list_key(endpoint, key):
-    """list the keys in configured redis
+def delete_key(endpoint, key):
+    """Delete the key in configured redis
     
     :param endpoint: string
     :param key: string
