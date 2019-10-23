@@ -15,12 +15,11 @@ import redis
 from botocore.exceptions import ClientError
 
 
-def get_object(endpoint, key, dtype):
+def get_object(endpoint, key):
     """Retrieve an object from configured redis under specified key
     
     :param endpoint: string
     :param key: string
-    :param dtype: string
     :return: string. If error, return None.
     """
     # Connect to redis
@@ -39,7 +38,6 @@ def get_object_or_wait(endpoint, key, sleep_time):
     
     :param endpoint: string
     :param key: string
-    :param dtype: string
     :return: numpy arrary. If error, return None.
     """
     # Connect to redis
