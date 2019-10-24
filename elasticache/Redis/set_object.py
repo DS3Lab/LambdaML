@@ -43,6 +43,45 @@ def set_object(endpoint, key, src_data):
         
 
    
+def set_object_in_hash(endpoint, key, field,  src_data):
+    """Add value from configured redis under specified key of certain hashtable
+    
+    :param endpoint: string
+    :param field: string
+    :param key: string
+    :param src_data: bitstream, int, string
+    :return: True if src_data was added to redis at endpoint under key, otherwise False
+    """
+    if isinstance(src_data,bytes) or isinstance(src_data,str) or isinstance(src_data,int):
+        object_data = src_data
+    else:
+        logging.error('Type of ' + str(type(src_data)) +
+                      ' for the argument \'src_data\' is not supported.')
+        
+    
+    
+    # Connect to redis
+    r = redis.Redis(host=endpoint, port=6379, db=0)
+    # Set the object
+    try:
+        response = r.hset(key=key,field=field,value=object_data)
+    except ClinetError as e:
+        # AllAccessDisabled error == endpoint not found
+        logging.error(e)
+        return False
+    return True
+        
+
+   
+
+             
+            
+    
+            
+        
+
+
+
 
              
             

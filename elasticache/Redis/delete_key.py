@@ -35,6 +35,39 @@ def delete_key(endpoint, key):
     return True
         
 
+def delete_keys_in_hash(endpoint, key, fields):
+    """delete the field within hash key in configured redis
+    
+    :param endpoint: string
+    :param key: string
+    :param field: string
+    :return: True if the reference objects were deleted, otherwise False 
+    """
+    
+    # Connect to redis
+    r = redis.Redis(host=endpoint, port=6379, db=0)
+    # Set the object
+    
+    try:
+         r.hdel(key, field)
+    except ClinetError as e:
+        # AllAccessDisabled error == endpoint or field not found
+        logging.error(e)
+        return False
+    
+    return True
+        
+
+   
+
+             
+            
+    
+            
+        
+
+
+
    
 
              

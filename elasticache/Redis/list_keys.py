@@ -34,6 +34,25 @@ def list_key(endpoint):
         return reponse
     return None
         
+def list_key_in_hash(endpoint, key):
+    """list all the fields within hash key in configured redis
+    
+    :param endpoint: string
+    :param key: string
+    :return: True if the reference objects were deleted, otherwise False 
+    """
+    
+    # Connect to redis
+    r = redis.Redis(host=endpoint, port=6379, db=0)
+    # Set the object
+    try:
+        r.hkeys(key) 
+    except ClinetError as e:
+        # AllAccessDisabled error == endpoint or key not found
+        logging.error(e)
+        return False
+    return True
+        
 
    
 

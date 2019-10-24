@@ -53,7 +53,52 @@ def get_object_or_wait(endpoint, key, sleep_time):
    
 
              
+def get_object_in_hash(endpoint, key,field):
+    """Retrieve an object from configured redis under specified key
+    
+    :param endpoint: string
+    :param key: string
+    :param field: string
+    :return: string. If error, return None.
+    """
+    # Connect to redis
+    r = redis.Redis(host=endpoint, port=6379, db=0)
+    # Retrieve the object
+    try:
+        response = r.hget(key=key,field=field)
+    except ClinetError as e:
+        # AllAccessDisabled error == endpoint or key not found
+        logging.error(e)
+        return None
+    return response
+
+def get_object_or_wait_hash(endpoint, key, field, sleep_time):
+    """Retrieve an object from configured redis under specified key
+    
+    :param endpoint: string
+    :param key: string
+    :param field: string
+    :return: numpy arrary. If error, return None.
+    """
+    # Connect to redis
+    r = redis.Redis(host=endpoint, port=6379, db=0)
+    # Retrieve the object
+    while True:
+        try:
+            response = r.hget(key=key,field=field)
+            return response
+        except ClinetError as e:
+            # AllAccessDisabled error == endpoint or key not found
+            time.sleep(sleep_time)
+   
+
+             
             
+    
+            
+        
+
+
     
             
         

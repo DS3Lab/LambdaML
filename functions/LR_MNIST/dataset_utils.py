@@ -10,10 +10,12 @@ import codecs
 import random
 import boto3
 import gzip
+import time
 
 s3 = boto3.resource('s3')
+
 # Download files from S3 and unzip them
-def preprocess(bucket_name, training_keys, test_keys, local_path):
+def preprocess_mnist(bucket_name, training_keys, test_keys, local_path):
 
     if not os.path.exists(os.path.join(local_path, 'raw_data')):
         os.makedirs(os.path.join(local_path, 'raw_data'))
@@ -23,7 +25,7 @@ def preprocess(bucket_name, training_keys, test_keys, local_path):
 
     for file in training_keys+test_keys:
 
-        # download file from S3
+        # download .gz file from S3
         s3.Bucket(bucket_name).download_file(file, os.path.join(local_path, 'raw_data', file))
 
         file_path = os.path.join(local_path, 'raw_data', file)
@@ -53,9 +55,10 @@ def preprocess(bucket_name, training_keys, test_keys, local_path):
     return training_x, training_y
 
 
-def partition_training_data(bucket_name, local_path, training_x, training_y, num_workers):
+def shuffle_and_partition(bucket_name, local_path, training_x, training_y, num_workers):
 
     # shuffle
+    shuffle_start = time.time()
     training_combined = list(zip(training_x, training_y))
     random.shuffle(training_combined)
     x_temp, y_temp = zip(*training_combined)
@@ -63,8 +66,10 @@ def partition_training_data(bucket_name, local_path, training_x, training_y, num
     num_examples = len(x_temp)
     num_examples_per_worker = num_examples // num_workers
     residue = num_examples % num_workers
+    print("shuffle cost {} s".format(time.time()-shuffle_start))
 
     # split the training set and save 
+    split_start = time.time()
     for i in range(num_workers):
 
         start = (num_examples_per_worker * i) + min(residue, i)
@@ -76,7 +81,8 @@ def partition_training_data(bucket_name, local_path, training_x, training_y, num
             torch.save(training_set, f)
 
         s3.Bucket(bucket_name).upload_file(os.path.join(local_path, 'processed_data', 'training_{}.pt'.format(i)), 'training_{}.pt'.format(i))
-
+    
+    print("split cost {} s".format(time.time()-split_start))
     print('Data Partition Done!')
 
 
