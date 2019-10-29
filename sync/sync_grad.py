@@ -160,7 +160,7 @@ def delete_expired_w_b(bucket_name, cur_epoch, cur_batch,
                 #     delete_object(bucket_name, file_key)
 
 
-def delete_expired_w_b(bucket_name, cur_epoch, w_prefix="w_", b_prefix="b_"):
+def delete_expired_w_b_by_epoch(bucket_name, cur_epoch, w_prefix="w_", b_prefix="b_"):
     objects = list_bucket_objects(bucket_name)
     if objects is not None:
         for obj in objects:

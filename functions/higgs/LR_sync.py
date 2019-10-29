@@ -7,6 +7,9 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
+from s3.list_objects import list_bucket_objects
+from s3.get_object import get_object
+from s3.put_object import put_object
 from sync.sync_grad import *
 
 from model.LogisticRegression import LogisticRegression
@@ -14,20 +17,20 @@ from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
 
 # lambda setting
-model_bucket = "tmp-params"
+file_bucket = "higgs-libsvm"
+grad_bucket = "tmp-grads"
+model_bucket = "tmp-updates"
 local_dir = "/tmp"
-# merged model format: w_{epoch}
-# tmp model format: tmp_w_{epoch}_{worker_id}
 w_prefix = "w_"
 b_prefix = "b_"
-tmp_w_prefix = "tmp_w_"
-tmp_b_prefix = "tmp_b_"
+w_grad_prefix = "w_grad_"
+b_grad_prefix = "b_grad_"
 
 # algorithm setting
-num_features = 150
+num_features = 30
 num_classes = 2
 learning_rate = 0.1
-batch_size = 100
+batch_size = 1000
 num_epochs = 2
 validation_ratio = .2
 shuffle_dataset = True
@@ -36,10 +39,12 @@ random_seed = 42
 
 def handler(event, context):
     startTs = time.time()
-    bucket = event['Records'][0]['s3']['bucket']['name']
+    original_bucket = event['Records'][0]['s3']['bucket']['name']
+    bucket = file_bucket
     key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
 
     print('bucket = {}'.format(bucket))
+    print('original bucket = {}'.format(original_bucket))
     print('key = {}'.format(key))
 
     key_splits = key.split("_")
@@ -103,6 +108,39 @@ def handler(event, context):
 
             print("forward and backward cost {} s".format(time.time()-batch_start))
 
+            w_grad = model.linear.weight.grad.data.numpy()
+            b_grad = model.linear.bias.grad.data.numpy()
+            #print("dtype of grad = {}".format(w_grad.dtype))
+            print("w_grad before merge = {}".format(w_grad[0][0:5]))
+            print("b_grad before merge = {}".format(b_grad))
+
+            sync_start = time.time()
+            put_object(grad_bucket, w_grad_prefix + str(worker_index), w_grad.tobytes())
+            put_object(grad_bucket, b_grad_prefix + str(worker_index), b_grad.tobytes())
+
+            file_postfix = "{}_{}".format(epoch, batch_index)
+            if worker_index == 0:
+                w_grad_merge, b_grad_merge = \
+                    merge_w_b_grads(grad_bucket, num_worker, w_grad.dtype,
+                                    w_grad.shape, b_grad.shape,
+                                    w_grad_prefix, b_grad_prefix)
+                put_merged_w_b_grad(model_bucket, w_grad_merge, b_grad_merge,
+                                    file_postfix, w_grad_prefix, b_grad_prefix)
+                delete_expired_w_b(model_bucket, epoch, batch_index, w_grad_prefix, b_grad_prefix)
+                model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
+                model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
+            else:
+                w_grad_merge, b_grad_merge = get_merged_w_b_grad(model_bucket, file_postfix,
+                                                                 w_grad.dtype, w_grad.shape, b_grad.shape,
+                                                                 w_grad_prefix, b_grad_prefix)
+                model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
+                model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
+
+            print("w_grad after merge = {}".format(model.linear.weight.grad.data.numpy()[0][:5]))
+            print("b_grad after merge = {}".format(model.linear.bias.grad.data.numpy()))
+
+            print("synchronization cost {} s".format(time.time() - sync_start))
+
             optimizer.step()
 
             print("batch cost {} s".format(time.time() - batch_start))
@@ -111,38 +149,9 @@ def handler(event, context):
                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
                       % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
 
-        w = model.linear.weight.data.numpy()
-        b = model.linear.bias.data.numpy()
-        # print("dtype of weight = {}".format(w.dtype))
-        print("weight before sync = {}".format(w[0][0:5]))
-        print("bias before sync = {}".format(b))
-
-        sync_start = time.time()
-        put_object(model_bucket, "{}{}_{}".format(tmp_w_prefix, epoch, worker_index), w.tobytes())
-        put_object(model_bucket, "{}{}_{}".format(tmp_b_prefix, epoch, worker_index), b.tobytes())
-
-        #file_postfix = "{}_{}".format(epoch, worker_index)
-        if worker_index == 0:
-            w_merge, b_merge = merge_w_b(model_bucket, num_worker, w.dtype,
-                                         w.shape, b.shape, tmp_w_prefix, tmp_b_prefix)
-            put_merged_w_b(model_bucket, w_merge, b_merge,
-                           str(epoch), w_prefix, b_prefix)
-            delete_expired_w_b_by_epoch(model_bucket, epoch, w_prefix, b_prefix)
-            model.linear.weight.data = torch.from_numpy(w_merge)
-            model.linear.bias.data = torch.from_numpy(b_merge)
-        else:
-            w_merge, b_merge = get_merged_w_b(model_bucket, str(epoch), w.dtype,
-                                              w.shape, b.shape, w_prefix, b_prefix)
-            model.linear.weight.data = torch.from_numpy(w_merge)
-            model.linear.bias.data = torch.from_numpy(b_merge)
-
-        print("weight after sync = {}".format(model.linear.weight.data.numpy()[0][:5]))
-        print("bias after sync = {}".format(model.linear.bias.data.numpy()))
-
-        print("synchronization cost {} s".format(time.time() - sync_start))
-
     if worker_index == 0:
         clear_bucket(model_bucket)
+        clear_bucket(grad_bucket)
 
     # Test the Model
     correct = 0
