@@ -34,7 +34,17 @@ def split_file_with_info(src_path, dst_path, num_files):
         file.close()
 
 
+def create_trigger_file(path, num_files):
+    for i in np.arange(num_files):
+        file_name = "{}_{}".format(i, num_files)
+        dst_file_name = os.path.join(path, file_name)
+        f = open(dst_file_name, 'w')
+        f.write("test")
+        f.close()
+
+
 if __name__ == "__main__":
-    src_dir = "D:\Dropbox\code\github\LambdaML\dataset\\agaricus_127d_train.libsvm"
-    dst_dir = "D:\Dropbox\code\github\LambdaML\dataset\splits\\"
-    split_file_with_info(src_dir, dst_dir, 2)
+    src_dir = "xxx"
+    dst_dir = "D:\\Dropbox\\code\\github\\LambdaML\\files\\"
+    #split_file_with_info(src_dir, dst_dir, 2)
+    create_trigger_file(dst_dir, 50)
