@@ -12,7 +12,7 @@ class Kmeans:
         self.error = error
 
     def l2_dist(self, a, b, ax=1):
-        return np.linalg.norm(a - b, axis=ax)
+        return np.mean(np.linalg.norm(a - b, axis=ax))
 
     def closest_centroid(self, points, centroids):
         """returns an array containing the index to the nearest centroid for each point"""
