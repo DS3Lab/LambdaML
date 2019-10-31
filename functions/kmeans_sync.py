@@ -12,9 +12,9 @@ from model.Kmeans import Kmeans
 from sync.sync_meta import SyncMeta
 
 # setting
-num_epochs = 100
+num_epochs = 15
 num_clusters = 10
-max_dim = 103
+max_dim = 100
 threshold = 0.02
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -53,26 +53,28 @@ def lambda_handler(event, context):
     # read file from s3
     if worker_index == 0:
         file = get_object(bucket_name, key).read().decode('utf-8').split("\n")
+        read_end = time.time()
+        logger.info("read data cost {} s".format(read_end - startTs))
         dataset_np = DenseLibsvmDataset2(file, max_dim).ins_np
         centroids = dataset_np[0:num_clusters]
         dt = centroids.dtype
         logger.info(f"dtype: {dt}")
+        logger.info("parse data cost {} s".format(time.time() - read_end))
         logger.info("Dimension of the dataset: {}, centorids: {}".format(dataset_np.shape, centroids.shape))
         put_object(avg_cent_bucket, "initial", centroids.tobytes())
     else:
         file = get_object(bucket_name, key).read().decode('utf-8').split("\n")
+        read_end = time.time()
+        logger.info("read data cost {} s".format(read_end - startTs))
         dataset_np = DenseLibsvmDataset2(file, max_dim).ins_np
         dt = dataset_np.dtype
-        cent = get_object_or_wait(avg_cent_bucket, "initial", 5).read()
+        wait_cent_start = time.time()
+        cent = get_object_or_wait(avg_cent_bucket, "initial", 0.1).read()
         if cent is None:
             logger.error("timeout for waiting initial centorids")
             return 0
         centroids = process_centroid(cent, num_clusters, dt)
-        logger.info("read data cost {} s".format(time.time() - startTs))
-
-    parse_start = time.time()
-    logger.info(f"Dataset size: {dataset_np.shape}")
-    logger.info("parse data cost {} s".format(time.time() - parse_start))
+        logger.info("Waiting for initial centroids cost {} s".format(time.time() - wait_cent_start))
 
     preprocess_start = time.time()
     s3 = boto3.client('s3')
@@ -83,10 +85,13 @@ def lambda_handler(event, context):
 
     # training
     for epoch in range(num_epochs):
+        epoch_start = time.time()
         logger.info(f"{worker_index}-th worker in {epoch}-th epoch")
         if epoch != 0:
             last_epoch = epoch - 1
-            cent_with_error = get_object_or_wait(avg_cent_bucket, f"avg-{last_epoch}", 20).read()
+            cent_with_error = get_object_or_wait(avg_cent_bucket, f"avg-{last_epoch}", 0.1).read()
+            wait_time = time.time()
+            logger.info(f"Wait for centroid for {epoch}-th epoch. Takes {wait_time - epoch_start}")
             if cent_with_error is None:
                 logger.error(f"timeout for waiting centorids for {epoch}")
                 return 0
@@ -95,21 +100,23 @@ def lambda_handler(event, context):
                 avg_error, centroids = process_centroid(cent_with_error, num_clusters, dt, True)
 
         if avg_error >= threshold:
+            compute_start = time.time()
             model = Kmeans(dataset_np, centroids)
             model.find_nearest_cluster()
-            logger.info(f"Epoch = {epoch} Error = {model.error}")
+            compute_end = time.time()
+            logger.info(f"Epoch = {epoch} Error = {model.error}. Computation time: {compute_end -  compute_start}")
 
-            sync_start = time.time()
             res = model.centroids.reshape(-1)
             res = np.append(res, model.error)
             success = put_object(worker_cent_bucket, f"{worker_index}_{epoch}", res.tobytes())
 
             if worker_index == 0 and success:
+                sync_start = time.time()
                 compute_average_centroids(avg_cent_bucket, worker_cent_bucket, num_worker, centroids.shape, epoch, dt)
-
-            logger.info("synchronization cost {} s".format(time.time() - sync_start))
+                logger.info("Wait for all workers cost {} s".format(time.time() - sync_start))
 
         else:
             logger.info(f"{worker_index}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
+            logger.info(f"Whole process time : {time.time() - preprocess_start}")
             return
 
