@@ -43,8 +43,22 @@ def create_trigger_file(path, num_files):
         f.close()
 
 
+def merge_files(src_files, dst_file):
+    dst_file = open(dst_file, 'w')
+    for src_name in src_files:
+        src_file = open(src_name, 'r')
+        for line in src_file:
+            dst_file.write(line)
+        src_file.close()
+    dst_file.close()
+
+
 if __name__ == "__main__":
-    src_dir = "xxx"
-    dst_dir = "D:\\Dropbox\\code\\github\\LambdaML\\files\\"
-    #split_file_with_info(src_dir, dst_dir, 2)
-    create_trigger_file(dst_dir, 50)
+    src_file = "C:\\Users\Jiawei\\Downloads\\dataset\\rcv1\\rcv1_libsvm"
+    dst_dir = "C:\\Users\Jiawei\\Downloads\\dataset\\rcv1\\splits"
+    split_file_with_info(src_file, dst_dir, 5)
+    #create_trigger_file(dst_dir, 50)
+    #src_files = ["C:\\Users\\Jiawei\\Downloads\\dataset\\rcv1\\rcv1_train.binary",
+    #             "C:\\Users\\Jiawei\\Downloads\\dataset\\rcv1\\rcv1_test.binary"]
+    #dst_file = "C:\\Users\Jiawei\\Downloads\\dataset\\rcv1\\rcv1_libsvm"
+    #merge_files(src_files, dst_file)

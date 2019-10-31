@@ -29,6 +29,8 @@ class SparseLibsvmDataset(Dataset):
     def parse_line(self, line):
         splits = line.split()
         label = int(splits[0])
+        if label == -1:
+            label = 0
         indices_row = []
         indices_col = []
         values = []
@@ -73,6 +75,8 @@ class DenseLibsvmDataset(Dataset):
     def parse_line(self, line):
         splits = line.split()
         label = int(splits[0])
+        if label == -1:
+            label = 0
         #values = np.zeros(self.max_dim, dtype=np.float32)
         values = [0] * self.max_dim
         for item in splits[1:]:
@@ -113,6 +117,8 @@ class DenseLibsvmDataset2(Dataset):
         splits = line.split()
         if len(splits) >= 2:
             label = int(splits[0])
+            if label == -1:
+                label = 0
             #values = np.zeros(self.max_dim, dtype=np.float32)
             values = [0] * self.max_dim
             for item in splits[1:]:
