@@ -110,6 +110,72 @@ def merge_w_b(bucket_name, num_workers,
     return w_sum / float(num_workers), b_sum / float(num_workers)
 
 
+def merge_w_b(bucket_name, num_workers,
+              dtype, w_shape, b_shape,
+              w_prefix="tmp_w_", b_prefix="tmp_b_"):
+    num_w_files = 0
+    num_b_files = 0
+    w_sum = np.zeros(w_shape, dtype=dtype)
+    b_sum = np.zeros(b_shape, dtype=dtype)
+
+    while num_w_files < num_workers or num_b_files < num_workers:
+        objects = list_bucket_objects(bucket_name)
+        if objects is not None:
+            for obj in objects:
+                file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                data = get_object(bucket_name, file_key).read()
+                bytes_data = np.frombuffer(data, dtype=dtype)
+                if file_key.startswith(w_prefix):
+                    w_grad = bytes_data.reshape(w_shape)
+                    print("merge the {}-th weight grad {} in bucket {} = {}".format(num_w_files, file_key, bucket_name, w_grad[0][:5]))
+                    w_sum = w_sum + w_grad
+                    num_w_files = num_w_files + 1
+                elif file_key.startswith(b_prefix):
+                    b_grad = bytes_data.reshape(b_shape)
+                    print("merge the {}-th bias grad {} in bucket {} = {}".format(num_b_files, file_key, bucket_name, b_grad))
+                    b_sum = b_sum + b_grad
+                    num_b_files = num_b_files + 1
+                delete_object(bucket_name, file_key)
+        # else:
+        #     # Didn't get any keys
+        #     print('No objects in {}'.format(bucket_name))
+
+    return w_sum / float(num_workers), b_sum / float(num_workers)
+
+
+def merge_all_workers(bucket_name, num_workers,
+              dtype, dshape, prefix):
+
+    num_files = 0
+    merged_value = np.zeros(dshape, dtype=dtype)
+
+    while num_files < num_workers:
+        objects = list_bucket_objects(bucket_name)
+        if objects is not None:
+            for obj in objects:
+                file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+
+                data = get_object(bucket_name, file_key).read()
+                bytes_data = np.frombuffer(data, dtype=dtype)
+                value = bytes_data.reshape(dshape)
+
+                print("merge the {}-th weight grad {} in bucket {} = {}".format(num_files, file_key, bucket_name, value[0][:5]))
+
+                merged_value = merged_value + value
+                num_files = num_files + 1
+
+                delete_object(bucket_name, file_key)
+    
+    # average weights
+    if prefix == 'w_':
+        merged_value = merged_value / float(num_workers)
+
+    return merged_value
+
+
+
+
+
 def put_merged_w_b_grad(bucket_name, w_grad, b_grad, file_postfix,
                         w_grad_prefix="w_grad_", b_grad_prefix="b_grad"):
     print('put merged weight grad {} to bucket {}'.format(w_grad_prefix + file_postfix, bucket_name))
@@ -124,6 +190,12 @@ def put_merged_w_b(bucket_name, w, b, file_postfix,
     put_object(bucket_name, w_prefix + file_postfix, w.tobytes())
     print('put merged bias {} to bucket {}'.format(b_prefix + file_postfix, bucket_name))
     put_object(bucket_name, b_prefix + file_postfix, b.tobytes())
+
+def put_merged(bucket_name, merged_value, prefix, file_postfix):
+    # print('put merged weight {} to bucket {}'.format(w_prefix + file_postfix, bucket_name))
+    put_object(bucket_name, prefix + file_postfix, merged_value.tobytes())
+    # print('put merged bias {} to bucket {}'.format(b_prefix + file_postfix, bucket_name))
+    # put_object(bucket_name, b_prefix + file_postfix, b.tobytes())
 
 
 def get_merged_w_b_grad(bucket_name, file_postfix,
@@ -152,6 +224,13 @@ def get_merged_w_b(bucket_name, file_postfix, dtype, w_shape, b_shape,
 
     return w_grad, b_grad
 
+def get_merged(bucket_name, prefix, file_postfix, dtype, dshape):
+    # print('get merged weight {} in bucket {}'.format(w_prefix + file_postfix, bucket_name))
+    merged_value = get_object_or_wait(bucket_name, prefix + file_postfix, 0.1).read()
+    merged_value_np = np.frombuffer(merged_value, dtype=dtype).reshape(dshape)
+
+    return merged_value_np
+
 
 def delete_expired_w_b(bucket_name, cur_epoch, cur_batch,
                         w_prefix="w_grad_", b_prefix="b_grad"):
@@ -169,6 +248,19 @@ def delete_expired_w_b(bucket_name, cur_epoch, cur_batch,
                 # elif key_epoch == cur_epoch and key_batch < cur_batch:
                 #     delete_object(bucket_name, file_key)
 
+
+def delete_expired(bucket_name, cur_epoch, cur_batch, prefix):
+    objects = list_bucket_objects(bucket_name)
+    if objects is not None:
+        for obj in objects:
+            file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+            if file_key.startswith(prefix):
+                key_splits = file_key.split("_")
+                key_batch = int(key_splits[-1])
+                key_epoch = int(key_splits[-2])
+                if key_epoch < cur_epoch or (key_epoch == cur_epoch and key_batch < cur_batch):
+                    print("delete object {} in bucket {}".format(file_key, bucket_name))
+                    delete_object(bucket_name, file_key)
 
 def delete_expired_w_b_by_epoch(bucket_name, cur_epoch, w_prefix="w_", b_prefix="b_"):
     objects = list_bucket_objects(bucket_name)
