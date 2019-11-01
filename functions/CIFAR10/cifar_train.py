@@ -1,3 +1,4 @@
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -28,6 +29,7 @@ from training_test import train, test
 # grad_bucket = "tmp-grads"
 # model_bucket = "tmp-updates"
 local_dir = "/tmp"
+# local_dir = "/tmp"
 # w_prefix = "w_"
 # b_prefix = "b_"
 # w_grad_prefix = "w_grad_"
