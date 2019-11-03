@@ -154,11 +154,13 @@ def handler(event, context):
                                                                  model_bucket, file_postfix,
                                                                  w_grad.dtype, w_grad.shape, b_grad.shape,
                                                                  w_grad_prefix, b_grad_prefix)
-                #wait for new flag of being accessible
-                sync_time = time.time()
-                while hcounter(endpoint, model_bucket, "counter")>= num_worker:
-                    time.sleep(0.01)
-                print("wait for synchronization = {}".format(time.time()-sync_time))
+                #flag for accessing.
+                #sync_time = time.time()
+                #while hcounter(endpoint, model_bucket, "counter")>= num_worker:
+                #    time.sleep(0.01)
+                #print("wait for synchronization = {}".format(time.time()-sync_time))
+                hcounter(endpoint, model_bucket, "counter")
+                print("number of being accessed at this moment = {}".format(hget_object(endpoint, model_bucket,"counter")))
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
 
