@@ -69,13 +69,10 @@ def split_file_with_info2(src_file, dst_path, num_files):
     for line in src_file:
         file_index = line_number % num_files
         line = line.strip("\n")
-        #dst_file[file_index] = dst_file[file_index]+line  
         dst_file[file_index].append(line+"\n") 
         line_number += 1
     i = 0
     for file in dst_file:
-        print(file.__class__)       
-        #put_object(dst_path,dst_file_names[i],file)
         put_object(dst_path,dst_file_names[i],bytes(''.join(file), encoding = "utf8"))
         i = i+1
 
