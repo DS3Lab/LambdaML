@@ -72,7 +72,6 @@ def split_file_with_info2(src_file, dst_path, num_files):
         file_index = line_number % num_files
         line = line.strip("\n")
         dst_file[file_index].append(line)
-        print(line[0])
         line_number += 1
     i = 0
     for file in dst_file:
