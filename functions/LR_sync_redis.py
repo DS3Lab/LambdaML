@@ -60,12 +60,12 @@ def handler(event, context):
     
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
+    #file = get_object(bucket, key).read()
     print("read data cost {} s".format(time.time() - startTs))
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
     print("libsvm operation cost {}s".format(parse_start - preprocess_start))
-    print("overview of dataset:", dataset)
     # Creating data indices for training and validation splits:
     
     dataset_size = len(dataset)
@@ -101,8 +101,8 @@ def handler(event, context):
     # clear everything before start  
     clear_bucket(endpoint, model_bucket)
     clear_bucket(endpoint,grad_bucket)
-    #hset_object(endpoint, model_bucket, "counter", 0)
-    #print("double check for synchronized flag = {}".format(hget_object(endpoint, model_bucket, "counter")))
+    hset_object(endpoint, model_bucket, "counter", 0)
+    print("double check for synchronized flag = {}".format(hget_object(endpoint, model_bucket, "counter")))
     # Training the Model
     for epoch in range(num_epochs):
         for batch_index, (items, labels) in enumerate(train_loader):
@@ -142,9 +142,9 @@ def handler(event, context):
                                     model_bucket, w_grad_merge, b_grad_merge,
                                     file_postfix, w_grad_prefix, b_grad_prefix)
                 start_T = time.time()                    
-                #while sync_counter(endpoint,model_bucket,num_worker):
-                #    time.sleep(0.05) #stuck until sync finishes.
-                #print("wait for synchronization = {}".format(time.time()-start_T))
+                while sync_counter(endpoint,model_bucket,num_worker):
+                    time.sleep(0.01) #stuck until sync finishes.
+                print("wait for synchronization = {}".format(time.time()-start_T))
                 delete_expired_w_b(endpoint,
                                    model_bucket, epoch, batch_index, w_grad_prefix, b_grad_prefix)
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
@@ -154,9 +154,11 @@ def handler(event, context):
                                                                  model_bucket, file_postfix,
                                                                  w_grad.dtype, w_grad.shape, b_grad.shape,
                                                                  w_grad_prefix, b_grad_prefix)
-                #flag for accessing.
-                #hcounter(endpoint, model_bucket, "counter")
-                #print("number of being accessed = {}".format(hget_object(endpoint, model_bucket,"counter")))
+                #wait for new flag of being accessible
+                sync_time = time.time()
+                while hcounter(endpoint, model_bucket, "counter")>= num_worker:
+                    time.sleep(0.01)
+                print("wait for synchronization = {}".format(time.time()-sync_time))
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
 

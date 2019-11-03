@@ -111,7 +111,7 @@ def clear_bucket(endpoint, bucket_name):
     
     objects = hlist_keys(endpoint, bucket_name)
     while objects!=None:
-        if len(objects) > 1:  
+        if len(objects) >= 1:  
             print("delete files {} in bucket {}".format(objects, bucket_name))
             hdelete_keys(endpoint, bucket_name, objects)
         objects = hlist_keys(endpoint, bucket_name)
@@ -123,5 +123,4 @@ def sync_counter(endpoint, bucket, num_workers):
         hset_object(endpoint,bucket,"counter",0)
         return False
     else:
-        hcounter(endpoint,bucket,"counter")
         return True
