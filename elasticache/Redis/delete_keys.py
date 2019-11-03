@@ -13,49 +13,44 @@
 import logging
 import redis
 from botocore.exceptions import ClientError
-from elasticache.Redis.list_keys import hlist_keys
- 
+
 
 def delete_keys(client, keys):
     """Delete keys in configured redis
     
-    :param endpoint: string
-    :param key: string or list of strings
-    :return: True if the reference objects were deleted, otherwise False 
+    :param client: redis client object
+    :param keys: string or list of strings
+    :return: True if the reference objects were deleted or don't exsit, otherwise False 
     """
     
     # Connect to redis
     #r = redis.Redis(host=endpoint, port=6379, db=0)
-    # Set the object
+
     try:
-        client.delete(keys) 
+        nums = client.delete(*keys) 
     except ClientError as e:
-        # AllAccessDisabled error == endpoint or key not found
+        # AllAccessDisabled error == client lost
         logging.error(e)
         return False
     return True
-        
 
 def hdelete_keys(client, key, fields):
     """delete the field within hash key in configured redis
     
-    :param endpoint: string
-    :param key: string or list of string
-    :param field: string
-    :return: True if the reference objects were deleted, otherwise False 
+    :param client: redis client object
+    :param key: string
+    :param fields: string or list of strings
+    :return: True if the reference objects were deleted or don't exsit, otherwise False 
     """
     
     # Connect to redis
     #r = redis.Redis(host=endpoint, port=6379, db=0)
-    # Set the object
 
-    # if field is not found, nothing will happend.
     
     try:
-        for i in range(len(fields)):    
-            client.hdel(key, fields[i])
+        client.hdel(key, *fields)
     except ClientError as e:
-        # AllAccessDisabled error == endpoint not found
+        # AllAccessDisabled error ==  client lost
         logging.error(e)
         return False
     
@@ -63,6 +58,7 @@ def hdelete_keys(client, key, fields):
         
 
 def handler(event, context):
+    from elasticache.Redis.list_keys import hlist_keys
     location = "test.fifamc.ng.0001.euc1.cache.amazonaws.com"
     endpoint = redis.Redis(host = location, port = 6379, db = 0)
     heyhey = hlist_keys(endpoint,"tmp-updates")

@@ -108,12 +108,13 @@ def delete_expired_w_b(endpoint, bucket_name, cur_epoch, cur_batch,
 
 
 def clear_bucket(endpoint, bucket_name):
-   
+    
     objects = hlist_keys(endpoint, bucket_name)
-    if objects is not None:
+    while objects!=None:
         if len(objects) > 1:  
             print("delete files {} in bucket {}".format(objects, bucket_name))
             hdelete_keys(endpoint, bucket_name, objects)
+        objects = hlist_keys(endpoint, bucket_name)
     return True
   
 def sync_counter(endpoint, bucket, num_workers):

@@ -14,19 +14,21 @@ import redis
 from botocore.exceptions import ClientError
 
 
-def list_keys(client):
+def list_keys(client, count = 1000):
     """list the keys in configured redis
     
     :param endpoint: string
-    :return: List of keys in bytes. If error, return None.
+    :param count: maximum number of keys returned	
+    :return: List of keys in bytes. If error, return None. Maximum number of keys is 1000.
     """
     
     # Connect to redis
     #r = redis.Redis(host=endpoint, port=6379, db=0)
-    # Set the object
+
+    # get the name of object
     try:
-        response = client.scan()[1] #match allows for the pattern of keys
-        names = [*response[1]]
+        response = client.scan(count=1000)[1] #match allows for the pattern of keys
+        names = response
     except ClientError as e:
         # AllAccessDisabled error == endpoint not found
         logging.error(e)
@@ -35,19 +37,20 @@ def list_keys(client):
         return names
     return None
         
-def hlist_keys(client, key):
+def hlist_keys(client, key, count = 1000):
     """list all the fields within hash key in configured redis
     
     :param endpoint: string
     :param key: string
-    :return: list of keys in bytes, None if error
+    :param count: maximum number of elements returned
+    :return: list of fields in bytes, None if error. Maximum number of fields is 1000.
     """
     
     # Connect to redis
     #r = redis.Redis(host=endpoint, port=6379, db=0)
     # Set the object
     try:
-        response = client.hscan(name = key)
+        response = client.hscan(name = key, count = count)
         names = [*response[1]]  
     except ClientError as e:
         # AllAccessDisabled error == endpoint or key not found

@@ -36,7 +36,7 @@ def set_object(client, key, src_data):
     try:
         response = client.set(name = key,value = object_data)
     except ClientError as e:
-        # AllAccessDisabled error == endpoint not found
+        # AllAccessDisabled error == client lost
         logging.error(e)
         return False
     return True
@@ -66,7 +66,7 @@ def hset_object(client, key, field, src_data):
     try:
         response = client.hset(name = key,key = field,value = object_data)
     except ClientError as e:
-        # AllAccessDisabled error == endpoint not found
+        # AllAccessDisabled error == client lost
         logging.error(e)
         return False
     return True

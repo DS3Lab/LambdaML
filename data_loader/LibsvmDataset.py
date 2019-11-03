@@ -138,7 +138,7 @@ class DenseLibsvmDataset2(Dataset):
 
 
 def main():
-    file = "../dataset/agaricus_127d_train.libsvm"
+    file = "dataset/agaricus_127d_train.libsvm"
     libsvm_dataset = DenseLibsvmDataset(file, 150)
 
     dataset_loader = torch.utils.data.DataLoader(dataset=libsvm_dataset,
