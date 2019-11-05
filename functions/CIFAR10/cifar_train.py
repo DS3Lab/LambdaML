@@ -1,8 +1,9 @@
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import boto3
+import time
 # import torch.utils.data as data
 
 # import torchvision
@@ -26,7 +27,7 @@ from training_test import train, test
 # # lambda setting
 # grad_bucket = "tmp-grads"
 # model_bucket = "tmp-updates"
-# local_dir = "/tmp"
+local_dir = "/tmp"
 # w_prefix = "w_"
 # b_prefix = "b_"
 # w_grad_prefix = "w_grad_"
@@ -39,13 +40,13 @@ training_file = 'training.pt'
 test_file = 'test.pt'
 
 # sync up mode
-sync_mode = 'model_avg'
-sync_step = 50
+sync_mode = 'grad_avg'
+sync_step = 1
 
 # learning algorithm setting
 learning_rate = 0.1
 batch_size = 128
-num_epochs = 3
+num_epochs = 5
 
 s3 = boto3.resource('s3')
 
@@ -69,7 +70,7 @@ def handler(event, context):
 
     trainset = torch.load(os.path.join(local_dir, training_file))
     testset = torch.load(os.path.join(local_dir, test_file))
-    trainloader = torch.utils.data.DataLoader(subset, batch_size=batch_size, shuffle=True)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
     testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False)
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
     
@@ -80,13 +81,13 @@ def handler(event, context):
     #Model
     print('==> Building model..')
     # net = VGG('VGG19')
-    # net = ResNet18()
+    net = ResNet18()
     # net = PreActResNet18()
     # net = GoogLeNet()
     # net = DenseNet121()
     # net = ResNeXt29_2x64d()
     # net = MobileNet()
-    net = MobileNetV2()
+    # net = MobileNetV2()
     # net = DPN92()
     # net = ShuffleNetG2()
     # net = SENet18()
@@ -98,6 +99,6 @@ def handler(event, context):
     optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=5e-4)
 
     for epoch in range(num_epochs):
-        train(epoch, net, trainloader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step):
+        train(epoch, net, trainloader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step)
         test(epoch, net, testloader, criterion)
 
