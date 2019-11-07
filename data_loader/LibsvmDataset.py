@@ -35,7 +35,7 @@ class SparseLibsvmDataset(Dataset):
         for item in splits[1:]:
             tup = item.split(":")
             indices_row.append(0)
-            indices_col.append(int(tup[0]))
+            indices_col.append(int(tup[0])-1)
             values.append(float(tup[1]))
         i = torch.LongTensor([indices_row, indices_col])
         v = torch.FloatTensor(values)
@@ -77,7 +77,7 @@ class DenseLibsvmDataset(Dataset):
         values = [0] * self.max_dim
         for item in splits[1:]:
             tup = item.split(":")
-            values[int(tup[0])] = float(tup[1])
+            values[int(tup[0])-1] = float(tup[1])
         vector = torch.tensor(values, dtype=torch.float32)
         return vector, label
 
@@ -109,6 +109,7 @@ class DenseLibsvmDataset2(Dataset):
         self.ins_np = np.array(self.ins_list_np)
         self.label_np = np.array(self.label_list).reshape(len(self.label_list), 1)
 
+
     def parse_line(self, line):
         splits = line.split()
         if len(splits) >= 2:
@@ -118,7 +119,7 @@ class DenseLibsvmDataset2(Dataset):
             for item in splits[1:]:
                 tup = item.split(":")
                 if len(tup) == 2:
-                    values[int(tup[0])] = float(tup[1])
+                    values[int(tup[0])-1] = float(tup[1])
                 else:
                     return None
             vector = torch.tensor(values, dtype=torch.float32)
@@ -137,7 +138,7 @@ class DenseLibsvmDataset2(Dataset):
 
 
 def main():
-    file = "../dataset/agaricus_127d_train.libsvm"
+    file = "dataset/agaricus_127d_train.libsvm"
     libsvm_dataset = DenseLibsvmDataset(file, 150)
 
     dataset_loader = torch.utils.data.DataLoader(dataset=libsvm_dataset,

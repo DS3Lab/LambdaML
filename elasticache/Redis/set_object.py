@@ -12,9 +12,9 @@
 import logging
 import redis
 from botocore.exceptions import ClientError
+from elasticache.Redis.get_object import get_object
 
-
-def set_object(endpoint, key, src_data):
+def set_object(client, key, src_data):
     """Add value from configured redis under specified key
     
     :param endpoint: string
@@ -31,19 +31,19 @@ def set_object(endpoint, key, src_data):
     
     
     # Connect to redis
-    r = redis.Redis(host=endpoint, port=6379, db=0)
+    #r = redis.Redis(host=endpoint, port=6379, db=0)
     # Set the object
     try:
-        response = r.set(key=key,value=object_data)
-    except ClinetError as e:
-        # AllAccessDisabled error == endpoint not found
+        response = client.set(name = key,value = object_data)
+    except ClientError as e:
+        # AllAccessDisabled error == client lost
         logging.error(e)
         return False
     return True
         
 
    
-def set_object_in_hash(endpoint, key, field,  src_data):
+def hset_object(client, key, field, src_data):
     """Add value from configured redis under specified key of certain hashtable
     
     :param endpoint: string
@@ -61,19 +61,23 @@ def set_object_in_hash(endpoint, key, field,  src_data):
     
     
     # Connect to redis
-    r = redis.Redis(host=endpoint, port=6379, db=0)
+    #client = redis.Redis(host=endpoint, port=6379, db=0)
     # Set the object
     try:
-        response = r.hset(key=key,field=field,value=object_data)
-    except ClinetError as e:
-        # AllAccessDisabled error == endpoint not found
+        response = client.hset(name = key,key = field,value = object_data)
+    except ClientError as e:
+        # AllAccessDisabled error == client lost
         logging.error(e)
         return False
     return True
         
 
-   
-
+def handler(event, context):
+    endpoint = "test-001.fifamc.0001.euc1.cache.amazonaws.com"
+    key = "lambdaml"
+    value = 1
+    set_object(endpoint,key,value)
+    print(get_object(endpoint,key))
              
             
     

@@ -9,72 +9,63 @@
 # This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
 # OF ANY KIND, either express or implied. See the License for the specific
 # language governing permissions and limitations under the License.
-
 import logging
 import redis
 from botocore.exceptions import ClientError
 
 
-def delete_key(endpoint, key):
-    """Delete the key in configured redis
+def counter(client,key):
+    """increment by 1 under specific key
     
-    :param endpoint: string
+    :param client: redis.client
     :param key: string
-    :return: True if the reference objects were deleted, otherwise False 
+    :return: True if it's connected 
     """
     
     # Connect to redis
-    r = redis.Redis(host=endpoint, port=6379, db=0)
+    #r = redis.Redis(host=endpoint, port=6379, db=0)
     # Set the object
     try:
-        r.delete(key) 
-    except ClinetError as e:
-        # AllAccessDisabled error == endpoint or key not found
+        client.incrby(key, 1)
+    except ClientError as e:
+        # AllAccessDisabled error == endpoint not found
         logging.error(e)
         return False
+    
     return True
         
-
-def delete_keys_in_hash(endpoint, key, fields):
-    """delete the field within hash key in configured redis
+def hcounter(client,key,field):
+    """increment by 1 under specific field of the key
     
-    :param endpoint: string
+    :param client: redis.client
     :param key: string
     :param field: string
-    :return: True if the reference objects were deleted, otherwise False 
+    :return: True if it's connected 
     """
     
     # Connect to redis
-    r = redis.Redis(host=endpoint, port=6379, db=0)
+    #r = redis.Redis(host=endpoint, port=6379, db=0)
     # Set the object
-    
     try:
-         r.hdel(key, field)
-    except ClinetError as e:
-        # AllAccessDisabled error == endpoint or field not found
+        client.hincrby(key, field, 1)
+    except ClientError as e:
+        # AllAccessDisabled error == endpoint not found
         logging.error(e)
         return False
     
     return True
         
 
-   
+def handler(event, context):
+  
+    endpoint = "test.fifamc.ng.0001.euc1.cache.amazonaws.com"
+    client = redis.Redis(host=endpont,port=6379,db=0)
+    print(counter(client,"LambdaML"))
 
              
             
     
             
         
-
-
-
-   
-
-             
-            
-    
-            
-        
-
 
 

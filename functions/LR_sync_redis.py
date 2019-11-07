@@ -7,7 +7,11 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from elasticache.Redis.set_object import set_object_in_hash
+from elasticache.Redis.set_object import hset_object
+from elasticache.Redis.counter import hcounter
+from elasticache.Redis.get_object import hget_object
+from elasticache.Redis.__init__ import redis_init
+from s3.get_object import get_object
 from sync.sync_grad_redis import *
 
 from model.LogisticRegression import LogisticRegression
@@ -15,16 +19,17 @@ from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
 
 # lambda setting
-endpoint = "endpoint"
-grad_key = "tmp-grads"
-model_key = "tmp-updates"
+redis_location = "test.fifamc.ng.0001.euc1.cache.amazonaws.com"
+grad_bucket = "tmp-grads"
+model_bucket = "tmp-updates"
+local_dir = "/tmp"
 w_prefix = "w_"
 b_prefix = "b_"
 w_grad_prefix = "w_grad_"
 b_grad_prefix = "b_grad_"
 
 # algorithm setting
-num_features = 150
+num_features = 126
 num_classes = 2
 learning_rate = 0.1
 batch_size = 100
@@ -33,44 +38,36 @@ validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
 
-"""
-event for redis
-{'endpoint', string;
-'field', string;
-'key', string
-'dim',[row,col]}
-"""
+endpoint = redis_init(redis_location)
+
 
 def handler(event, context):
-    startTs = time.time()
-    endpoint = event['endpoint']
-    bucket = event['key']
-    key = event['field']
-    dim = event['dim']
     
+    startTs = time.time()
+    bucket = event['Records'][0]['s3']['bucket']['name']
+    key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+  
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
+  
     key_splits = key.split("_")
     worker_index = int(key_splits[0])
     num_worker = int(key_splits[1])
+    
+    
     sync_meta = SyncMeta(worker_index, num_worker)
     print("synchronization meta {}".format(sync_meta.__str__()))
-
-    # read file from s3
-    """
+    
+    # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
     print("read data cost {} s".format(time.time() - startTs))
-
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
-    """
-    file = get_object_in_hash(endpoint,bucket,key)
-    parse_start = time.time()
-    dataset = np.reshape(np.fromstring(file, num_features),dim)
-    print("parse data cost {} s".format(time.time() - parse_start))
-    
     preprocess_start = time.time()
+    print("libsvm operation cost {}s".format(parse_start - preprocess_start))
+    print("overview of dataset:", dataset)
     # Creating data indices for training and validation splits:
+    
     dataset_size = len(dataset)
     indices = list(range(dataset_size))
     split = int(np.floor(validation_ratio * dataset_size))
@@ -89,9 +86,10 @@ def handler(event, context):
     validation_loader = torch.utils.data.DataLoader(dataset,
                                                     batch_size=batch_size,
                                                     sampler=valid_sampler)
-
+    
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
-
+    
+    
     model = LogisticRegression(num_features, num_classes)
 
     # Loss and Optimizer
@@ -99,7 +97,12 @@ def handler(event, context):
     # Set parameters to be updated.
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-
+    
+    # clear everything before start  
+    clear_bucket(endpoint, model_bucket)
+    clear_bucket(endpoint,grad_bucket)
+    #hset_object(endpoint, model_bucket, "counter", 0)
+    #print("double check for synchronized flag = {}".format(hget_object(endpoint, model_bucket, "counter")))
     # Training the Model
     for epoch in range(num_epochs):
         for batch_index, (items, labels) in enumerate(train_loader):
@@ -118,18 +121,16 @@ def handler(event, context):
 
             w_grad = model.linear.weight.grad.data.numpy()
             b_grad = model.linear.bias.grad.data.numpy()
-            #print("dtype of grad = {}".format(w_grad.dtype))
             print("w_grad before merge = {}".format(w_grad[0][0:5]))
             print("b_grad before merge = {}".format(b_grad))
-
-            sync_start = time.time()
-            """
-            put_object(grad_bucket, w_grad_prefix + str(worker_index), w_grad.tobytes())
-            put_object(grad_bucket, b_grad_prefix + str(worker_index), b_grad.tobytes())
-            """
-            set_object_in_hash(endpoint, grad_bucket, grad_bucket, w_grad_prefix + str(worker_index), w_grad.tobytes())
-            set_object_in_hash(endpoint, grad_bucket, grad_bucket, b_grad_prefix + str(worker_index), b_grad.tobytes())
             
+            #synchronization starts from that every worker writes their gradients of this batch and epoch
+            sync_start = time.time()
+            hset_object(endpoint, grad_bucket, w_grad_prefix + str(worker_index), w_grad.tobytes())
+            hset_object(endpoint, grad_bucket, b_grad_prefix + str(worker_index), b_grad.tobytes())
+            
+            #merge gradients among files
+            merge_start = time.time()
             file_postfix = "{}_{}".format(epoch, batch_index)
             if worker_index == 0:
                 w_grad_merge, b_grad_merge = \
@@ -140,6 +141,10 @@ def handler(event, context):
                 put_merged_w_b_grad(endpoint,
                                     model_bucket, w_grad_merge, b_grad_merge,
                                     file_postfix, w_grad_prefix, b_grad_prefix)
+                start_T = time.time()                    
+                #while sync_counter(endpoint,model_bucket,num_worker):
+                #    time.sleep(0.05) #stuck until sync finishes.
+                #print("wait for synchronization = {}".format(time.time()-start_T))
                 delete_expired_w_b(endpoint,
                                    model_bucket, epoch, batch_index, w_grad_prefix, b_grad_prefix)
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
@@ -149,6 +154,9 @@ def handler(event, context):
                                                                  model_bucket, file_postfix,
                                                                  w_grad.dtype, w_grad.shape, b_grad.shape,
                                                                  w_grad_prefix, b_grad_prefix)
+                #flag for accessing.
+                #hcounter(endpoint, model_bucket, "counter")
+                #print("number of being accessed = {}".format(hget_object(endpoint, model_bucket,"counter")))
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
 
@@ -174,7 +182,6 @@ def handler(event, context):
     total = 0
     for items, labels in validation_loader:
         items = Variable(items.view(-1, num_features))
-        # items = Variable(items)
         outputs = model(items)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)

@@ -17,7 +17,7 @@ from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
 
 # lambda setting
-file_bucket = "higgs-libsvm"
+file_bucket = "rcv1-libsvm"
 grad_bucket = "tmp-grads"
 model_bucket = "tmp-updates"
 local_dir = "/tmp"
@@ -27,7 +27,7 @@ w_grad_prefix = "w_grad_"
 b_grad_prefix = "b_grad_"
 
 # algorithm setting
-num_features = 30
+num_features = 47240
 num_classes = 2
 learning_rate = 0.1
 batch_size = 10000

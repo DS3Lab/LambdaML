@@ -14,47 +14,60 @@ import redis
 from botocore.exceptions import ClientError
 
 
-def list_key(endpoint):
+def list_keys(client, count = 1000):
     """list the keys in configured redis
     
     :param endpoint: string
-    :return: List of keys. If error, return None.
+    :param count: maximum number of keys returned	
+    :return: List of keys in bytes. If error, return None. Maximum number of keys is 1000.
     """
     
     # Connect to redis
-    r = redis.Redis(host=endpoint, port=6379, db=0)
-    # Set the object
+    #r = redis.Redis(host=endpoint, port=6379, db=0)
+
+    # get the name of object
     try:
-        response = r.scan()[1] #match allows for the pattern of keys
-    except ClinetError as e:
+        response = client.scan(count=1000)[1] #match allows for the pattern of keys
+        names = response
+    except ClientError as e:
         # AllAccessDisabled error == endpoint not found
         logging.error(e)
         return None
-    if len(response)>0:
-        return reponse
+    if len(names)>0:
+        return names
     return None
         
-def list_key_in_hash(endpoint, key):
+def hlist_keys(client, key, count = 1000):
     """list all the fields within hash key in configured redis
     
     :param endpoint: string
     :param key: string
-    :return: True if the reference objects were deleted, otherwise False 
+    :param count: maximum number of elements returned
+    :return: list of fields in bytes, None if error. Maximum number of fields is 1000.
     """
     
     # Connect to redis
-    r = redis.Redis(host=endpoint, port=6379, db=0)
+    #r = redis.Redis(host=endpoint, port=6379, db=0)
     # Set the object
     try:
-        r.hkeys(key) 
-    except ClinetError as e:
+        response = client.hscan(name = key, count = count)
+        names = [*response[1]]  
+    except ClientError as e:
         # AllAccessDisabled error == endpoint or key not found
         logging.error(e)
-        return False
-    return True
+        return None
+    if len(names)>0:
+        return names
+    return None
         
 
-   
+def handler(event, context):
+  
+    endpoint = "test.fifamc.ng.0001.euc1.cache.amazonaws.com"
+    client = redis.Redis(host=endpoint,port=6379,db=0)
+    print(list_keys(client))
+    print(hlist_keys(client,"tmp-grads"))
+    print(hlist_keys(client,"tmp-updates"))
 
              
             

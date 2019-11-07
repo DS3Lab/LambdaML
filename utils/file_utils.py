@@ -1,6 +1,7 @@
 import os
 import numpy as np
 
+
 def random_files(num_files, path):
     for i in np.arange(num_files):
         w = np.random.rand(2, 3)
@@ -43,8 +44,44 @@ def create_trigger_file(path, num_files):
         f.close()
 
 
+def merge_files(src_files, dst_file):
+    dst_file = open(dst_file, 'w')
+    for src_name in src_files:
+        src_file = open(src_name, 'r')
+        for line in src_file:
+            dst_file.write(line)
+        src_file.close()
+    dst_file.close()
+
+
+def split_file_with_info2(src_file, dst_path, num_files):
+    from s3.put_object import put_object
+
+    line_number = 0
+
+    #src_file = open(src_path, "r")
+    print("Splitting the files into {} files".format(num_files))
+    dst_file = []
+    dst_file_names= []
+    for i in np.arange(num_files):
+        file_name = "{}_{}".format(i, num_files)
+        dst_file.append([])
+        dst_file_names.append(file_name)
+
+    for line in src_file:
+        file_index = line_number % num_files
+        line = line.strip("\n")
+        dst_file[file_index].append(line)
+        print(line[0])
+        line_number += 1
+    i = 0
+    for file in dst_file:
+        put_object(dst_path,dst_file_names[i],np.array(file).tobytes())
+        i = i+1
+
+
 if __name__ == "__main__":
-    src_dir = "xxx"
-    dst_dir = "D:\\Dropbox\\code\\github\\LambdaML\\files\\"
-    #split_file_with_info(src_dir, dst_dir, 2)
-    create_trigger_file(dst_dir, 50)
+    src_file = "../dataset/agaricus_127d_train.libsvm"
+    dst_dir = "../dataset/splits"
+    split_file_with_info(src_file, dst_dir, 5)
+

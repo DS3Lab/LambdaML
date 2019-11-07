@@ -15,74 +15,53 @@ import redis
 from botocore.exceptions import ClientError
 
 
-def delete_keys(endpoint, keys):
-    """delete the keys in configured redis
+def delete_keys(client, keys):
+    """Delete keys in configured redis
     
-    :param endpoint: string
-    :param keys: list of strings
-    :return: True if the reference objects were deleted, otherwise False 
+    :param client: redis client object
+    :param keys: string or list of strings
+    :return: True if the reference objects were deleted or don't exsit, otherwise False 
     """
     
     # Connect to redis
-    r = redis.Redis(host=endpoint, port=6379, db=0)
-    # Set the object
-    
+    #r = redis.Redis(host=endpoint, port=6379, db=0)
+
     try:
-         
-         while len(keys)>0:
-             r.delete(keys[-1])
-             keys.pop()
-    except ClinetError as e:
-        # AllAccessDisabled error == endpoint not found
+        nums = client.delete(*keys) 
+    except ClientError as e:
+        # AllAccessDisabled error == client lost
         logging.error(e)
         return False
-    
     return True
 
-  
-def delete_keys_in_hash(endpoint, key, fields):
-    """delete the fields within hash key in configured redis
+def hdelete_keys(client, key, fields):
+    """delete the field within hash key in configured redis
     
-    :param endpoint: string
+    :param client: redis client object
     :param key: string
-    :param fields: list of strings
-    :return: True if the reference objects were deleted, otherwise False 
+    :param fields: string or list of strings
+    :return: True if the reference objects were deleted or don't exsit, otherwise False 
     """
     
     # Connect to redis
-    r = redis.Redis(host=endpoint, port=6379, db=0)
-    # Set the object
+    #r = redis.Redis(host=endpoint, port=6379, db=0)
+
     
     try:
-         
-         while len(fields)>0:
-             r.hdel(key, fields[-1])
-             fields.pop()
-    except ClinetError as e:
-        # AllAccessDisabled error == endpoint not found
+        client.hdel(key, *fields)
+    except ClientError as e:
+        # AllAccessDisabled error ==  client lost
         logging.error(e)
         return False
     
     return True
         
 
-   
-
-             
-            
-    
-            
-        
-
-
-
-
-   
-
-             
-            
-    
-            
-        
-
-
+def handler(event, context):
+    from elasticache.Redis.list_keys import hlist_keys
+    location = "test.fifamc.ng.0001.euc1.cache.amazonaws.com"
+    endpoint = redis.Redis(host = location, port = 6379, db = 0)
+    heyhey = hlist_keys(endpoint,"tmp-updates")
+    print(heyhey)
+    hdelete_keys(endpoint,"tmp-updates",he)
+    print(hlist_keys(endpoint,"tmp-updates"))
