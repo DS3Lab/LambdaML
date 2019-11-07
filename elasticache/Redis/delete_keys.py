@@ -19,7 +19,7 @@ def delete_keys(client, keys):
     """Delete keys in configured redis
     
     :param client: redis client object
-    :param keys: list of strings
+    :param keys: string or list of strings
     :return: True if the reference objects were deleted or don't exsit, otherwise False 
     """
     
@@ -39,7 +39,7 @@ def hdelete_keys(client, key, fields):
     
     :param client: redis client object
     :param key: string
-    :param fields: list of strings
+    :param fields: string or list of strings
     :return: True if the reference objects were deleted or don't exsit, otherwise False 
     """
     
