@@ -29,8 +29,7 @@ w_grad_prefix = "w_grad_"
 b_grad_prefix = "b_grad_"
 
 # algorithm setting
-num_features = 28
-num_classes = 2
+
 learning_rate = 0.1
 batch_size = 100
 num_epochs = 2
@@ -46,7 +45,8 @@ def handler(event, context):
     startTs = time.time()
     bucket = event['bucket']
     key = event['name']
-  
+    num_features = event['num_features']
+    num_classes = event['num_classes']
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
   
@@ -60,14 +60,13 @@ def handler(event, context):
     
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
-    #file = get_object(bucket, key).read()
     print("read data cost {} s".format(time.time() - startTs))
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
     print("libsvm operation cost {}s".format(parse_start - preprocess_start))
+   
     # Creating data indices for training and validation splits:
-    
     dataset_size = len(dataset)
     print("dataset size = {}".format(dataset_size))
     indices = list(range(dataset_size))
@@ -99,13 +98,6 @@ def handler(event, context):
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
     
-    # clear everything before start  
-    """
-    clear_bucket(endpoint, model_bucket)
-    clear_bucket(endpoint,grad_bucket)
-    hset_object(endpoint, model_bucket, "counter", 0)
-    print("double check for synchronized flag = {}".format(hget_object(endpoint, model_bucket, "counter")))
-    """
     # Training the Model
     for epoch in range(num_epochs):
         for batch_index, (items, labels) in enumerate(train_loader):
@@ -143,29 +135,29 @@ def handler(event, context):
                                     w_grad.shape, b_grad.shape,
                                     w_grad_prefix, b_grad_prefix)
                 print("model average time = {}".format(time.time()-merge_start))
-                put_merged_w_b_grad(endpoint,
-                                    model_bucket, w_grad_merge, b_grad_merge,
-                                    file_postfix, w_grad_prefix, b_grad_prefix)
-                #start_T = time.time()                    
-                #while sync_counter(endpoint,model_bucket,num_worker):
-                #    time.sleep(0.01) #stuck until sync finishes.
-                #print("wait for synchronization = {}".format(time.time()-start_T))
-                delete_expired_w_b(endpoint,
-                                   model_bucket, epoch, batch_index, w_grad_prefix, b_grad_prefix)
+                #possible rewrite the file before being accessed. wait until anyone finishes accessing.
+                while sync_counter(endpoint, model_bucket, num_worker):
+                    time.sleep(0.01)
+                put_merged_w_b_grad(endpoint,model_bucket, 
+                                    w_grad_merge, b_grad_merge,
+                                    w_grad_prefix, b_grad_prefix)
+                hset_object(endpoint, model_bucket, "epoch", epoch)
+                hset_object(endpoint, model_bucket, "index", batch_index)
+                
+                #delete_expired_w_b(endpoint,
+                #                   model_bucket, epoch, batch_index, w_grad_prefix, b_grad_prefix)
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
             else:
-                w_grad_merge, b_grad_merge = get_merged_w_b_grad(endpoint,
-                                                                 model_bucket, file_postfix,
-                                                                 w_grad.dtype, w_grad.shape, b_grad.shape,
-                                                                 w_grad_prefix, b_grad_prefix)
-                #flag for accessing.
-                #sync_time = time.time()
-                #while hcounter(endpoint, model_bucket, "counter")>= num_worker:
-                #    time.sleep(0.01)
-                #print("wait for synchronization = {}".format(time.time()-sync_time))
-                #hcounter(endpoint, model_bucket, "counter")
-                print("number of being accessed at this moment = {}".format(hget_object(endpoint, model_bucket,"counter")))
+                while hget_object(endpoint, model_bucket, "epoch")!=None:#wait for flag to access
+                    if int(hget_object(endpoint, model_bucket, "epoch")) == epoch and int(hget_object(endpoint, model_bucket, "index")) == batch_index:
+                        break
+                    time.sleep(0.01)
+                w_grad_merge, b_grad_merge = get_merged_w_b_grad(endpoint,model_bucket, 
+                                                                    w_grad.dtype, w_grad.shape, b_grad.shape,
+                                                                    w_grad_prefix, b_grad_prefix)
+                hcounter(endpoint, model_bucket, "counter")#flag it if it's accessed.
+                print("number of access at this time = {}".format(int(hget_object(endpoint, model_bucket, "counter"))))
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
 
@@ -181,12 +173,13 @@ def handler(event, context):
             if (batch_index + 1) % 10 == 0:
                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
                       % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
-
+    """
     if worker_index == 0:
-        #删除过早...
+        while sync_counter(endpoint, bucket, num_workers):
+            time.sleep(0.001)
         clear_bucket(endpoint, model_bucket)
         clear_bucket(endpoint, grad_bucket)
-
+    """
     # Test the Model
     correct = 0
     total = 0
