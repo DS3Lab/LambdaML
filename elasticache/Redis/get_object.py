@@ -28,7 +28,7 @@ def get_object(client, key):
 
     # Retrieve the object
     try:   
-	response = client.get(name=key)
+        response = client.get(name=key)
     except ClientError as e:
         # AllAccessDisabled error == client lost
         logging.error(e)
@@ -73,7 +73,7 @@ def hget_object(client, key, field):
     # Retrieve the object
     
     try:   
-	response = client.hget(name=key, key=field)
+        response = client.hget(name=key, key=field)
     except ClientError as e:
         # AllAccessDisabled error == client lost
         logging.error(e)
