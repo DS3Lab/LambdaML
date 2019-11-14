@@ -32,7 +32,7 @@ def merge_np_bytes(endpoint, bucket_name, num_workers, dtype, shape):
    
 def merge_w_b_grads(endpoint, bucket_name, num_workers,
                     dtype, w_shape, b_shape,
-                    w_grad_prefix="w_grad_", b_grad_prefix="b_grad"):
+                    w_grad_prefix="w_grad_", b_grad_prefix="b_grad_"):
     num_w_files = 0
     num_b_files = 0
     w_grad_sum = np.zeros(w_shape, dtype=dtype)
@@ -41,7 +41,7 @@ def merge_w_b_grads(endpoint, bucket_name, num_workers,
     while num_w_files < num_workers or num_b_files < num_workers:
        
         objects = hlist_keys(endpoint,bucket_name)
-        if objects is not None:
+        while objects is not None:
             for obj in objects:
                 file_key = bytes.decode(obj)
                 #print("the name of the file being processed = {}".format(file_key))
@@ -58,6 +58,45 @@ def merge_w_b_grads(endpoint, bucket_name, num_workers,
                     num_b_files = num_b_files + 1
                 #the processed keys are deleted at the stage of mergence
                 hdelete_keys(endpoint,bucket_name,[file_key])
+            objects = hlist_keys(endpoint,bucket_name)
+            #print("the keys being deleted = {}".format(objects))
+        
+        
+    return w_grad_sum, b_grad_sum
+
+def merge_w_b_grads_layers(endpoint, bucket_name, num_workers,
+                    dtype, w_shape, b_shape,
+                    w_grad_prefix="w_grad_", b_grad_prefix="b_grad"):
+    num_w_files = 0
+    num_b_files = 0
+    w_grad_sum = []
+    b_grad_sum = []
+    for i in range(len(w_shape)):
+        w_grad_sum.append(np.zeros(w_shape[0], dtype=dtype))
+        b_grad_sum.append(np.zeros(b_shape[0], dtype=dtype))
+    layers = len(w_shape)
+    while num_w_files < layers*num_workers or num_b_files < layers*num_workers:
+       
+        objects = hlist_keys(endpoint,bucket_name)
+        while objects is not None:
+            for obj in objects:
+                file_key = bytes.decode(obj)
+                #print("the name of the file being processed = {}".format(file_key))
+                bytes_data = np.fromstring(hget_object(endpoint, bucket_name, file_key), dtype)
+                if file_key.startswith(w_grad_prefix):
+                    layer = file_key.split("_")[2]
+                    w_grad = bytes_data.reshape(w_shape[layer])
+                    print("merge the {}-th weight grad {} in bucket {} = {}".format(num_w_files, file_key, bucket_name, w_grad[0][:5]))
+                    w_grad_sum[layer] = w_grad_sum[layer] + w_grad
+                    num_w_files = num_w_files+ 1
+                elif file_key.startswith(b_grad_prefix):
+                    b_grad = bytes_data.reshape(b_shape[layer])
+                    print("merge the {}-th bias grad {} in bucket {} = {}".format(num_b_files, file_key, bucket_name, b_grad))
+                    b_grad_sum[layer] = b_grad_sum[layer] + b_grad
+                    num_b_files = num_b_files + 1
+                #the processed keys are deleted at the stage of mergence
+                hdelete_keys(endpoint,bucket_name,[file_key])
+            objects = hlist_keys(endpoint,bucket_name)
             #print("the keys being deleted = {}".format(objects))
         
     return w_grad_sum, b_grad_sum
@@ -86,7 +125,28 @@ def get_merged_w_b_grad(endpoint, bucket_name,
     
     return w_grad, b_grad 
 
+def put_merged_w_b_grad2(endpoint, bucket_name, w_grad, b_grad,file_postfix,
+                        w_grad_prefix="w_grad_", b_grad_prefix="b_grad"):
+    print('put merged weight {} to bucket {}'.format(w_grad_prefix+file_postfix, (bucket_name,)))
+    hset_object(endpoint, bucket_name,w_grad_prefix+file_postfix, w_grad.tobytes())
+    print('put merged bias {} to bucket {}'.format(b_grad_prefix+file_postfix, bucket_name))
+    hset_object(endpoint, bucket_name,b_grad_prefix+file_postfix, b_grad.tobytes())
 
+
+def get_merged_w_b_grad2(endpoint, bucket_name, file_postfix,
+                        dtype, w_shape, b_shape,
+                        w_prefix="w_grad_", b_prefix="b_grad"):
+  
+    
+    print("get merged weight {} in bucket {}".format(w_prefix+file_postfix , bucket_name))
+
+    w_grad = np.fromstring(hget_object_or_wait(endpoint, bucket_name,  w_prefix + file_postfix , 0.1), dtype).reshape(w_shape)
+    
+
+    print('get merged bias {} in bucket {}'.format(b_prefix+file_postfix, bucket_name))
+    b_grad = np.fromstring(hget_object_or_wait(endpoint, bucket_name, b_prefix + file_postfix, 0.1), dtype).reshape(b_shape)
+    
+    return w_grad, b_grad 
 def delete_expired_w_b(endpoint, bucket_name, cur_epoch, cur_batch,
                         w_prefix="w_grad_", b_prefix="b_grad"):
     objects = hlist_keys(endpoint, bucket_name)
@@ -117,6 +177,7 @@ def clear_bucket(endpoint, bucket_name):
   
 def sync_counter(endpoint, bucket, num_workers):
     access_counter = int(hget_object(endpoint, bucket, "counter"))
+    print(access_counter)
     if access_counter >= num_workers-1:#keep the "1" for worker as granted
         hset_object(endpoint,bucket,"counter",0)
         return False
