@@ -4,7 +4,6 @@ import numpy as np
 import torch
 from torch.utils.data.dataset import Dataset
 
-from sync.sync_meta import SyncMeta
 
 
 class SparseLibsvmDataset(Dataset):
