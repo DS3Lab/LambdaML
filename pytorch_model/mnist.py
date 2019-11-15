@@ -19,7 +19,7 @@ class Net(nn.Module):
         x = x.view(-1, 4*4*50)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        return x
 
 
 class LogisticRegression(torch.nn.Module):
@@ -29,5 +29,6 @@ class LogisticRegression(torch.nn.Module):
 
     def forward(self, x):
         #y_pred = torch.sigmoid(self.linear(x))
+        x = x.view(-1, 28 * 28)
         y_pred = self.linear(x)
         return y_pred
