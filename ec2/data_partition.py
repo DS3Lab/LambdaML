@@ -1,6 +1,7 @@
 from torchvision import datasets, transforms
 import torch.distributed as dist
 from torch.utils.data import DataLoader
+from data_loader.LibsvmDataset import SparseLibsvmDataset
 
 from random import Random
 
@@ -77,6 +78,22 @@ def partition_cifar10(batch_size, path, download=True):
 
     train_dataset = datasets.CIFAR10(path, train=True, download=download, transform=transform_train)
     test_dataset = datasets.CIFAR10(path, train=False, download=download, transform=transform_test)
+    size = dist.get_world_size()
+    bsz = int(batch_size / float(size))
+    train_partition_sizes = [1.0 / size for _ in range(size)]
+    train_partition = DataPartitioner(train_dataset, train_partition_sizes)
+    train_partition = train_partition.use(dist.get_rank())
+    train_loader = DataLoader(
+        train_partition, batch_size=bsz, shuffle=True)
+    test_loader = DataLoader(
+        test_dataset, batch_size=batch_size, shuffle=True)
+    return train_loader, bsz, test_loader
+
+
+def partition_agaricus(batch_size, train_file, test_file, download=True):
+    train_dataset = SparseLibsvmDataset(train_file, 127)
+    test_dataset = SparseLibsvmDataset(test_file, 127)
+
     size = dist.get_world_size()
     bsz = int(batch_size / float(size))
     train_partition_sizes = [1.0 / size for _ in range(size)]
