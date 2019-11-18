@@ -144,5 +144,5 @@ if __name__ == "__main__":
     test_file = "../dataset/agaricus_127d_test.libsvm"
     train_data = SparseLibsvmDataset(train_file, 127)
     test_data = SparseLibsvmDataset(test_file, 127)
-    lr = LogisticRegression(train_data, test_data, 127, 1, 20, 0.01, 10)
+    lr = LogisticRegression(train_data, test_data, 127, 20, 0.01, 10)
     lr.fit()
