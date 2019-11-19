@@ -1,32 +1,16 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import boto3
 import time
-# import torch.utils.data as data
 
-# import torchvision
-# import torchvision.transforms as transforms
-# from PIL import Image
-# from torchsummary import summary
-import os
-# import argparse
-
-# from s3.list_objects import list_bucket_objects
-# from s3.get_object import get_object
-# from s3.put_object import put_object
-# from sync.sync_grad import *
 from sync.sync_meta import SyncMeta
-
 from models import *
 from training_test import train, test
 
 
-
-# # lambda setting
-# grad_bucket = "tmp-grads"
-# model_bucket = "tmp-updates"
 local_dir = "/tmp"
 # local_dir = "/tmp"
 # w_prefix = "w_"
@@ -45,9 +29,9 @@ sync_mode = 'grad_avg'
 sync_step = 1
 
 # learning algorithm setting
-learning_rate = 0.1
-batch_size = 128
-num_epochs = 5
+learning_rate = 0.01
+batch_size = 32
+num_epochs = 1
 
 s3 = boto3.resource('s3')
 
@@ -82,7 +66,8 @@ def handler(event, context):
     #Model
     print('==> Building model..')
     # net = VGG('VGG19')
-    net = ResNet18()
+    # net = ResNet18()
+    net = ResNet50()
     # net = PreActResNet18()
     # net = GoogLeNet()
     # net = DenseNet121()
@@ -94,6 +79,8 @@ def handler(event, context):
     # net = SENet18()
     # net = ShuffleNetV2(1)
     # net = EfficientNetB0()
+    
+    print("Model: ResNet50")
 
     net = net.to(device)
     criterion = nn.CrossEntropyLoss()
