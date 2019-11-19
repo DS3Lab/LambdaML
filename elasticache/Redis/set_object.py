@@ -19,7 +19,7 @@ def set_object(client, key, src_data):
     
     :param endpoint: string
     :param key: string
-    :param src_data: bitstream, int, string
+    :param src_data: bytestream, int, string
     :return: True if src_data was added to redis at endpoint under key, otherwise False
     """
     if isinstance(src_data,bytes) or isinstance(src_data,str) or isinstance(src_data,int):
@@ -49,7 +49,7 @@ def hset_object(client, key, field, src_data):
     :param endpoint: string
     :param field: string
     :param key: string
-    :param src_data: bitstream, int, string
+    :param src_data: bytesstream, int, string
     :return: True if src_data was added to redis at endpoint under key, otherwise False
     """
     if isinstance(src_data,bytes) or isinstance(src_data,str) or isinstance(src_data,int):
