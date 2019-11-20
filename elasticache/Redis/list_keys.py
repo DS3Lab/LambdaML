@@ -19,7 +19,7 @@ def list_keys(client, count = 1000):
     
     :param endpoint: string
     :param count: maximum number of keys returned	
-    :return: List of keys in bytes. If error, return None. Maximum number of keys is 1000.
+    :return: List of keys in bytes. If error, return None. Maximum number of keys is 1000 in default node configuration.
     """
     
     # Connect to redis
