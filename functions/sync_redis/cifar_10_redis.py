@@ -73,7 +73,7 @@ def handler(event, context):
     trainset = torch.load(train_path)
     testset= torch.load(test_path)
     print("read data cost {} s".format(time.time() - readS3_start))
-    
+    print(testset)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
     testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False)
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
