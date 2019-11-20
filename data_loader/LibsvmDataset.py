@@ -14,16 +14,12 @@ class SparseLibsvmDataset(Dataset):
         self.max_dim = max_dim
         self.ins_list = []
         self.label_list = []
-        self.ins_list_np = []
         with open(txt_path, 'r') as f:
             lines = f.readlines()
             for line in lines:
                 ins = self.parse_line(line)
                 self.ins_list.append(ins[0])
-                self.ins_list_np.append(ins[0].numpy())
                 self.label_list.append(ins[1])
-        self.ins_np = np.array(self.ins_list_np)
-        self.label_np = np.array(self.label_list).reshape(len(self.label_list), 1)
 
     def parse_line(self, line):
         splits = line.split()
@@ -137,16 +133,16 @@ class DenseLibsvmDataset2(Dataset):
 
 
 def main():
-    file = "dataset/agaricus_127d_train.libsvm"
-    libsvm_dataset = DenseLibsvmDataset(file, 150)
+    train_file = "../dataset/agaricus_127d_train.libsvm"
+    test_file = "../dataset/agaricus_127d_test.libsvm"
+    train_data = SparseLibsvmDataset(train_file, 127)
+    test_data = SparseLibsvmDataset(test_file, 127)
 
-    dataset_loader = torch.utils.data.DataLoader(dataset=libsvm_dataset,
-                                                    batch_size=10,
-                                                    shuffle=False)
+    print(train_data.__getitem__(0)[0])
 
-    for ins, label in dataset_loader:
-        print(ins)
-        print(label)
+    # for batch_idx, (ins, label) in enumerate(dataset_loader):
+    #     print(ins)
+    #     print(label)
 
 
 if __name__ == '__main__':

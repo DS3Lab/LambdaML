@@ -12,21 +12,15 @@ from model.Kmeans import Kmeans
 from sync.sync_meta import SyncMeta
 
 # setting
-num_epochs = 15
-num_clusters = 10
-max_dim = 100
-threshold = 0.02
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-worker_cent_bucket = "worker-centroids"
-avg_cent_bucket = "avg-centroids"
 
 
 def process_centroid(centroid_byte, nr_cluster, dt, with_error=False):
     cent = np.frombuffer(centroid_byte, dtype=dt)
     logger.info(f"size of cent: {cent.shape}")
     if with_error:
-        cent_size = cent.shape[0]-1
+        cent_size = cent.shape[0] - 1
         return cent[-1], cent[0:-1].reshape(nr_cluster, int(cent_size / nr_cluster))
     else:
         cent_size = cent.shape[0]
@@ -36,6 +30,13 @@ def process_centroid(centroid_byte, nr_cluster, dt, with_error=False):
 def lambda_handler(event, context):
     startTs = time.time()
     avg_error = np.iinfo(np.int16).max
+
+    max_dim = event['max_dim']
+    num_clusters = event['num_clusters']
+    worker_cent_bucket = event["worker_cent_bucket"]
+    avg_cent_bucket = event["avg_cent_bucket"]
+    num_epochs = event["num_epochs"]
+    threshold = event["threshold"]
 
     # Reading data from S3
     bucket_name = event['bucket_name']
@@ -104,7 +105,7 @@ def lambda_handler(event, context):
             model = Kmeans(dataset_np, centroids)
             model.find_nearest_cluster()
             compute_end = time.time()
-            logger.info(f"Epoch = {epoch} Error = {model.error}. Computation time: {compute_end -  compute_start}")
+            logger.info(f"Epoch = {epoch} Error = {model.error}. Computation time: {compute_end - compute_start}")
 
             res = model.centroids.reshape(-1)
             res = np.append(res, model.error)
