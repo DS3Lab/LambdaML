@@ -12,6 +12,104 @@ from s3.delete_objects import delete_objects
 
 
 
+def scatter_reduce(vector, tmp_bucket, merged_bucket, num_workers, myrank, postfix):
+    
+    # vector is supposed to be a 1-d numpy array
+    num_all_values = vector.size
+    num_values_per_worker = num_all_values // num_workers
+    residue = num_all_values % num_workers
+    curr_epoch = postfix.split("_")[0]
+    curr_batch = postfix.split("_")[1]
+
+    my_offset = (num_values_per_worker * myrank) + min(residue, myrank)
+    my_length = num_values_per_worker + (1 if myrank < residue else 0)
+    my_chunk = vector[my_offset : my_offset + my_length]
+
+    # write partitioned vector to the shared memory, except the chunk charged by myself
+    for i in range(num_workers):
+        if i != myrank:
+            offset = (num_values_per_worker * i) + min(residue, i)
+            length = num_values_per_worker + (1 if i < residue else 0)
+            # indicating the chunk number and which worker it comes from
+            key = "{}_{}".format(i, myrank)
+            
+            # format of key in tmp-bucket: chunkID_workerID_epoch_batch
+            put_object(tmp_bucket, key + '_' + postfix, vector[offset : offset + length].tobytes())
+    
+    # read and aggergate the corresponding chunk
+    num_files = 0
+    while num_files < num_workers - 1:
+        objects = list_bucket_objects(tmp_bucket)
+
+        if objects is not None:
+            for obj in objects:
+
+                file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                key_splits = file_key.split("_")
+                
+                # if it's the chunk I care and it is from the current step
+                 # format of key in tmp-bucket: chunkID_workerID_epoch_batch
+                if key_splits[0] == str(myrank) and key_splits[2] == curr_epoch and key_splits[3] == curr_batch:
+                    
+                    data = get_object(tmp_bucket, file_key).read()
+                    bytes_data = np.frombuffer(data, dtype=vector.dtype)
+                    my_chunk = my_chunk + bytes_data
+                    num_files += 1
+                    delete_object(tmp_bucket, file_key)
+
+    # write the aggregated chunk back
+    # key format in merged_bucket: chunkID_epoch_batch
+    put_object(merged_bucket, str(myrank) + '_' + postfix, my_chunk.tobytes())
+
+    # read other aggregated chunks
+    merged_value = {}
+    merged_value[myrank] = my_chunk
+    
+    num_merged_files = 0
+    already_read = []
+    while num_merged_files < num_workers - 1:
+        objects = list_bucket_objects(merged_bucket)
+
+        if objects is not None:
+            for obj in objects:
+
+                file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                key_splits = file_key.split("_")
+                #key format in merged_bucket: chunkID_epoch_batch
+                if key_splits[0] != str(myrank) and key_splits[1] == curr_epoch and key_splits[2] == curr_batch and file_key not in already_read:
+                # if not file_key.startswith(str(myrank)) and file_key not in already_read:
+
+                    # key_splits = file_key.split("_")
+                    data = get_object(merged_bucket, file_key).read()
+                    bytes_data = np.frombuffer(data, dtype=vector.dtype)
+
+                    merged_value[int(file_key[0])] = bytes_data
+                    
+                    already_read.append(file_key)
+                    num_merged_files += 1
+
+    # reconstruct the whole vector
+    result = merged_value[0]
+    for k in range(1, num_workers):
+        result = np.concatenate((result, merged_value[k]))
+
+    return result
+
+# delete the merged values of the *current or older* steps
+def delete_expired_merged(bucket_name, cur_epoch, cur_batch):
+    objects = list_bucket_objects(bucket_name)
+    if objects is not None:
+        for obj in objects:
+            file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+            key_splits = file_key.split("_")
+            key_batch = int(key_splits[-1])
+            key_epoch = int(key_splits[-2])
+            if key_epoch < cur_epoch or (key_epoch == cur_epoch and key_batch < cur_batch):
+                print("delete object {} in bucket {}".format(file_key, bucket_name))
+                delete_object(bucket_name, file_key)
+
+
+
 def merge_all_workers(bucket_name, num_workers, prefix):
 
     num_files = 0
