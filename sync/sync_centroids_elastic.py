@@ -1,8 +1,7 @@
 import numpy as np
-import urllib
 
 from elasticache.Redis.list_keys import hlist_keys
-from elasticache.Redis.get_object import hget_object,hget_object_or_wait
+from elasticache.Redis.get_object import hget_object
 from elasticache.Redis.set_object import hset_object
 from elasticache.Redis.delete_keys import hdelete_keys
 
@@ -23,15 +22,15 @@ def compute_average_centroids(endpoint, avg_cent_bucket, worker_cent_bucket, num
         objects = hlist_keys(endpoint, worker_cent_bucket)
         if objects is not None:
             for obj in objects:
-                # file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
                 file_key = bytes.decode(obj)
-                # cent_with_error = np.frombuffer(data, dtype=dt)
-                cent_with_error = np.fromstring(hget_object(endpoint, worker_cent_bucket, file_key), dtype=dt)
+                cent_with_error = np.frombuffer(hget_object(endpoint, worker_cent_bucket, file_key), dtype=dt)
                 cent = cent_with_error[0:-1].reshape(shape)
                 error = cent_with_error[-1]
                 centroids_vec_list.append(cent)
                 error_list.append(error)
                 num_files = num_files + 1
+        else:
+            print(f"no object in the {worker_cent_bucket}")
 
     print("All workers are ready.")
     avg = avg_centroids(centroids_vec_list)
@@ -54,3 +53,4 @@ def clear_bucket(endpoint, bucket_name):
             hdelete_keys(endpoint, bucket_name, objects)
         objects = hlist_keys(endpoint, bucket_name)
     return True
+

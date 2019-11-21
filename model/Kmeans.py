@@ -23,15 +23,14 @@ class Kmeans:
 
         while True:
             print(remaining)
-            if (remaining <= batch_size):
-                dist = np.full((remaining, centroids.shape[0]), np.inf)
+            dist = np.full((remaining, centroids.shape[0]), np.inf)
+            if remaining <= batch_size:
                 for i in range(centroids.shape[0]):
                     dist[:, i] = np.sum(np.square(points[current_batch:current_batch + remaining] - centroids[i, :]),
                                         axis=1)
                 argmin_dist.append(np.argmin(dist, axis=1))
                 break
             else:
-                dist = np.full((batch_size, centroids.shape[0]), np.inf)
                 for i in range(centroids.shape[0]):
                     dist[:, i] = np.sum(np.square(points[current_batch:current_batch + batch_size] - centroids[i, :]),
                                         axis=1)
@@ -47,7 +46,6 @@ class Kmeans:
         return res
 
     def move_centroids(self, points, closest, centroids):
-        """returns the new centroids assigned from the points closest to them"""
         x = np.array([points[closest == k].mean(axis=0) for k in range(centroids.shape[0])])
         return np.nan_to_num(x)
 

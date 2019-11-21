@@ -10,7 +10,7 @@ class SparseKmeans(object):
     def __init__(self, _data, _centroids, _nr_feature, _nr_cluster, _error=np.iinfo(np.int16).max):
         self.data = _data
         self.nr_feature = _nr_feature
-        self.centroids = _centroids
+        self.centroids = [torch.tensor(c).to_sparse() for c in _centroids]
         self.nr_cluster = _nr_cluster
         self.error = _error
         self.model = torch.zeros(self.nr_feature, 1)
@@ -46,7 +46,7 @@ class SparseKmeans(object):
 
     def get_error(self, old_cent, new_cent):
         tmp = self.l2_dist_sq(new_cent[0], old_cent[0])
-        for i in range(1,self.nr_cluster):
+        for i in range(1, self.nr_cluster):
             tmp = torch.sparse.FloatTensor.add(self.l2_dist_sq(new_cent[i], old_cent[i]), tmp)
         return torch.sparse.FloatTensor.div(tmp, self.nr_cluster)
 
@@ -59,12 +59,6 @@ class SparseKmeans(object):
         return
 
 
-def get_centroids(train_data, nr_cluster):
-    ins_list = []
-    for i in range(nr_cluster):
-        ins, label = train_data.__getitem__(i)
-        ins_list.append(ins)
-    return ins_list
 
 if __name__ == "__main__":
     train_file = "../dataset/agaricus_127d_train.libsvm"
@@ -73,6 +67,6 @@ if __name__ == "__main__":
     train_data = SparseLibsvmDataset(train_file, dim)
     test_data = SparseLibsvmDataset(test_file, dim)
     nr_cluster = 10
-    centroids = get_centroids(train_data, nr_cluster)
+    centroids = train_data.ins_list[:nr_cluster]
     kmeans_model = SparseKmeans(train_data, centroids, dim, nr_cluster)
     kmeans_model.find_nearest_cluster()
