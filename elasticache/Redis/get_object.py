@@ -20,7 +20,7 @@ def get_object(client, key):
 
     :param client: redis client object
     :param key: string
-    :return: string. If error, return None.
+    :return: direct bytestream, no need to read from buffer. If error, return None.
     """
     # Connect to redis
     #r = redis.Redis(host=endpoint, port=6379, db=0)
@@ -28,7 +28,7 @@ def get_object(client, key):
 
     # Retrieve the object
     try:   
-	response = client.get(name=key)
+        response = client.get(name=key)
     except ClientError as e:
         # AllAccessDisabled error == client lost
         logging.error(e)
@@ -41,7 +41,7 @@ def get_object_or_wait(client, key, sleep_time):
     :param client: Redis client object
     :param key: string
     :param sleep_time: float
-    :return: string. If error, return None.
+    :return: direct bytestream, no need to read from buffer.. If error, return None.
     """
     # Connect to redis
     #client = redis.Redis(host=endpoint, port=6379, db=0)
@@ -66,14 +66,14 @@ def hget_object(client, key, field):
     :param client: redis client object
     :param key: string
     :param field: string
-    :return: string. If error, return None.
+    :return: direct bytestream, no need to read from buffer. If error, return None.
     """
     # Connect to redis
     #client = redis.Redis(host=endpoint, port=6379, db=0)
     # Retrieve the object
     
     try:   
-	response = client.hget(name=key, key=field)
+        response = client.hget(name=key, key=field)
     except ClientError as e:
         # AllAccessDisabled error == client lost
         logging.error(e)
@@ -88,7 +88,7 @@ def hget_object_or_wait(client, key, field, sleep_time):
     :param key: string
     :param field: string
     :param sleep_time: float
-    :return: string. If error, return None.
+    :return: direct bytestream, no need to read from buffer. If error, return None.
     """
     # Connect to redis
     #client = redis.Redis(host=endpoint, port=6379, db=0)
