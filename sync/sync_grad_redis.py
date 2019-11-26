@@ -70,7 +70,7 @@ def delete_expired_w_b_layers(endpoint, bucket_name, cur_epoch, cur_batch, prefi
                 key_epoch = int(key_splits[-2])
                 if key_epoch < cur_epoch or (key_epoch == cur_epoch and key_batch < cur_batch):
                     print("delete object {} in bucket {}".format(file_key, bucket_name))
-                hdelete_keys(endpoint, bucket_name, [file_key])
+                    hdelete_keys(endpoint, bucket_name, [file_key])
 
 
 
