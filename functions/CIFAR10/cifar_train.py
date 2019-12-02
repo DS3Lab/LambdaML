@@ -12,13 +12,6 @@ from training_test import train, test
 
 
 local_dir = "/tmp"
-# local_dir = "/tmp"
-# w_prefix = "w_"
-# b_prefix = "b_"
-# w_grad_prefix = "w_grad_"
-# b_grad_prefix = "b_grad_"
-# w_weights_prefix = "w_wei_"
-# b_weights_prefix = "b_wei_"
 
 # dataset setting
 training_file = 'training.pt'
