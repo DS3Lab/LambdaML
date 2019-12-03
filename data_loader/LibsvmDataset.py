@@ -5,18 +5,19 @@ import torch
 from torch.utils.data.dataset import Dataset
 
 
+
 class SparseLibsvmDataset(Dataset):
 
     def __init__(self,
-                 txt_path,
+                 lines,
                  max_dim):
         self.max_dim = max_dim
         self.ins_list = []
         self.label_list = []
-        with open(txt_path, 'r') as f:
-            lines = f.readlines()
-            for line in lines:
-                ins = self.parse_line(line)
+        for line in lines:
+            line = line.strip("\n")
+            ins = self.parse_line(line)
+            if ins is not None:
                 self.ins_list.append(ins[0])
                 self.label_list.append(ins[1])
 
