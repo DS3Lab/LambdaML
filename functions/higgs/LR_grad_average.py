@@ -150,22 +150,24 @@ def handler(event, context):
                     print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
                           % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
 
+            # Test the Model
+            correct = 0
+            total = 0
+            for items, labels in validation_loader:
+                items = Variable(items.view(-1, num_features))
+                # items = Variable(items)
+                outputs = model(items)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum()
+
+            print('Accuracy of the model on the %d test samples: %d %%' % (
+            len(val_indices), 100 * correct / total))
+
         if worker_index == 0:
             clear_bucket(model_bucket)
             clear_bucket(grad_bucket)
 
-        # Test the Model
-        correct = 0
-        total = 0
-        for items, labels in validation_loader:
-            items = Variable(items.view(-1, num_features))
-            # items = Variable(items)
-            outputs = model(items)
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum()
-
-        print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
 
         endTs = time.time()
         print("elapsed time = {} s".format(endTs - startTs))
