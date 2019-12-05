@@ -106,7 +106,7 @@ def handler(event, context):
 
     for epoch in range(num_epochs):
         train(epoch, net, trainloader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step)
-        test(epoch, net, testloader, criterion)
+        test(epoch, net, testloader, criterion, device)
 
 # Training
 def train(epoch, net, trainloader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step):
@@ -248,7 +248,7 @@ def train(epoch, net, trainloader, optimizer, criterion, device, worker_index, n
             print('Epoch: {}, Step: {}, Loss:{}'.format(epoch+1, batch_idx+1, loss.data))
 
 
-def test(epoch, net, testloader, criterion):
+def test(epoch, net, testloader, criterion, device):
     # global best_acc
     net.eval()
     test_loss = 0
