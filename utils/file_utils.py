@@ -77,9 +77,9 @@ def split_file_with_info2(src_file, dst_path, num_files):
         i = i+1
 
 
-
 if __name__ == "__main__":
-    src_file = "../dataset/agaricus_127d_train.libsvm"
-    dst_dir = "../dataset/datasplits"
-    split_file_with_info(src_file, dst_dir, 5)
-
+    # src_file = "../dataset/agaricus_127d_train.libsvm"
+    # dst_dir = "../dataset/datasplits"
+    # split_file_with_info(src_file, dst_dir, 5)
+    # dir = "../dataset/higgs-trigger"
+    # create_trigger_file(dir, 50)

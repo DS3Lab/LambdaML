@@ -104,7 +104,6 @@ class DenseLibsvmDataset2(Dataset):
         self.ins_np = np.array(self.ins_list_np)
         self.label_np = np.array(self.label_list).reshape(len(self.label_list), 1)
 
-
     def parse_line(self, line):
         splits = line.split()
         if len(splits) >= 2:
