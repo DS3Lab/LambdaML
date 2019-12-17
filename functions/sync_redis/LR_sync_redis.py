@@ -2,6 +2,7 @@ import time
 import urllib.parse
 import logging
 import numpy as np
+import pickle
 
 import torch
 from torch.autograd import Variable
@@ -12,6 +13,7 @@ from elasticache.Redis.counter import hcounter
 from elasticache.Redis.get_object import hget_object
 from elasticache.Redis.__init__ import redis_init
 from s3.get_object import get_object
+from s3.put_object import put_object
 from sync.sync_grad_redis import *
 
 from model.LogisticRegression import LogisticRegression
@@ -19,7 +21,7 @@ from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
 
 # lambda setting
-redis_location = "test.fifamc.ng.0001.euc1.cache.amazonaws.com"
+
 grad_bucket = "tmp-grads"
 model_bucket = "tmp-updates"
 local_dir = "/tmp"
@@ -31,13 +33,14 @@ b_grad_prefix = "b_grad_"
 # algorithm setting
 
 learning_rate = 0.1
-batch_size = 100
-num_epochs = 2
+batch_size = 10000
+num_epochs = 1
 validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
 
-endpoint = redis_init(redis_location)
+
+
 
 
 def handler(event, context):
@@ -47,16 +50,20 @@ def handler(event, context):
     key = event['name']
     num_features = event['num_features']
     num_classes = event['num_classes']
+    redis_location = event['redis']
+    endpoint = redis_init(redis_location)
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
   
     key_splits = key.split("_")
     worker_index = int(key_splits[0])
-    num_worker = int(key_splits[1])
-    
-    
+    #num_worker = int(key_splits[1])
+    num_worker = event['num_files']
     sync_meta = SyncMeta(worker_index, num_worker)
     print("synchronization meta {}".format(sync_meta.__str__()))
+    
+    batch_size = 10000
+    batch_size = int(np.ceil(batch_size/num_worker))
     
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
@@ -98,6 +105,10 @@ def handler(event, context):
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
     
+    sync_epoch_time = []
+    write_local_epoch_time = []
+    calculation_epoch_time = []
+    
     # Training the Model
     for epoch in range(num_epochs):
         for batch_index, (items, labels) in enumerate(train_loader):
@@ -111,19 +122,24 @@ def handler(event, context):
             outputs = model(items)
             loss = criterion(outputs, labels)
             loss.backward()
-
-            print("forward and backward cost {} s".format(time.time()-batch_start))
+            tmp_calculation_time = time.time()-batch_start
+            print("forward and backward cost {} s".format(tmp_calculation_time))
+            if batch_index != 0:
+                calculation_epoch_time.append(tmp_calculation_time)
 
             w_grad = model.linear.weight.grad.data.numpy()
             b_grad = model.linear.bias.grad.data.numpy()
-            print("w_grad before merge = {}".format(w_grad[0][0:5]))
-            print("b_grad before merge = {}".format(b_grad))
             
             #synchronization starts from that every worker writes their gradients of this batch and epoch
+            
             sync_start = time.time()
+            put_object_start = time.time()
             hset_object(endpoint, grad_bucket, w_grad_prefix + str(worker_index), w_grad.tobytes())
             hset_object(endpoint, grad_bucket, b_grad_prefix + str(worker_index), b_grad.tobytes())
-            
+            tmp_write_local_epoch_time = time.time()-put_object_start
+            print("write local gradient cost = {}".format(tmp_write_local_epoch_time))
+            if batch_index != 0 :
+                write_local_epoch_time.append(tmp_write_local_epoch_time)
             #merge gradients among files
             merge_start = time.time()
             file_postfix = "{}_{}".format(epoch, batch_index)
@@ -136,10 +152,10 @@ def handler(event, context):
                                     w_grad_prefix, b_grad_prefix)
                 print("model average time = {}".format(time.time()-merge_start))
                 #possible rewrite the file before being accessed. wait until anyone finishes accessing.
-                while sync_counter(endpoint, model_bucket, num_worker):
-                    time.sleep(0.01)
+                #while sync_counter(endpoint, model_bucket, num_worker):
+                #    time.sleep(0.01)
                 put_merged_w_b_grad(endpoint,model_bucket, 
-                                    w_grad_merge, b_grad_merge,
+                                    w_grad_merge, b_grad_merge, file_postfix,
                                     w_grad_prefix, b_grad_prefix)
                 hset_object(endpoint, model_bucket, "epoch", epoch)
                 hset_object(endpoint, model_bucket, "index", batch_index)
@@ -149,23 +165,19 @@ def handler(event, context):
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
             else:
-                while hget_object(endpoint, model_bucket, "epoch")!=None:#wait for flag to access
-                    if int(hget_object(endpoint, model_bucket, "epoch")) == epoch and int(hget_object(endpoint, model_bucket, "index")) == batch_index:
-                        break
-                    time.sleep(0.01)
-                w_grad_merge, b_grad_merge = get_merged_w_b_grad(endpoint,model_bucket, 
+               
+                w_grad_merge, b_grad_merge = get_merged_w_b_grad(endpoint,model_bucket, file_postfix,
                                                                     w_grad.dtype, w_grad.shape, b_grad.shape,
                                                                     w_grad_prefix, b_grad_prefix)
-                hcounter(endpoint, model_bucket, "counter")#flag it if it's accessed.
-                print("number of access at this time = {}".format(int(hget_object(endpoint, model_bucket, "counter"))))
+                #hcounter(endpoint, model_bucket, "counter")#flag it if it's accessed.
+                #print("number of access at this time = {}".format(int(hget_object(endpoint, model_bucket, "counter"))))
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
-
-            print("w_grad after merge = {}".format(model.linear.weight.grad.data.numpy()[0][:5]))
-            print("b_grad after merge = {}".format(model.linear.bias.grad.data.numpy()))
-
-            print("synchronization cost {} s".format(time.time() - sync_start))
-
+            tmp_sync_time = time.time() - sync_start
+            print("synchronization cost {} s".format(tmp_sync_time))
+            if batch_index != 0:
+                sync_epoch_time.append(tmp_sync_time)
+            
             optimizer.step()
 
             print("batch cost {} s".format(time.time() - batch_start))
@@ -173,13 +185,10 @@ def handler(event, context):
             if (batch_index + 1) % 10 == 0:
                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
                       % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
-    """
-    if worker_index == 0:
-        while sync_counter(endpoint, bucket, num_workers):
-            time.sleep(0.001)
-        clear_bucket(endpoint, model_bucket)
-        clear_bucket(endpoint, grad_bucket)
-    """
+            if (batch_index + 1)>= dataset_size/5/batch_size:
+                time_record = np.array([sync_epoch_time,write_local_epoch_time,calculation_epoch_time])
+                put_object("time-record-redis","time_{}".format(worker_index),pickle.dumps(time_record))
+                return
     # Test the Model
     correct = 0
     total = 0
@@ -194,3 +203,4 @@ def handler(event, context):
 
     endTs = time.time()
     print("elapsed time = {} s".format(endTs - startTs))
+    
