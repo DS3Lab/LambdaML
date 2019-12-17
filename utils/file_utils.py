@@ -1,6 +1,5 @@
 import os
 import numpy as np
-from s3.put_object import put_object
 
 def random_files(num_files, path):
     for i in np.arange(num_files):
@@ -34,6 +33,25 @@ def split_file_with_info(src_path, dst_path, num_files):
     for file in dst_file:
         file.close()
 
+def split_file_with_info2(src_path, dst_path, start, num_files, total_files):
+    line_number = 0
+
+    src_file = open(src_path, "r")
+    print("Splitting {} into {} files".format(src_path, num_files))
+
+    dst_file = []
+    for i in np.arange(num_files):
+        file_name = "{}_{}".format(i+start, total_files)
+        dst_file_name = os.path.join(dst_path, file_name)
+        dst_file.append(create_file(dst_file_name))
+
+    for line in src_file:
+        file_index = line_number % num_files
+        dst_file[file_index].write(line)
+        line_number += 1
+
+    for file in dst_file:
+        file.close()
 
 def create_trigger_file(path, num_files):
     for i in np.arange(num_files):
@@ -54,32 +72,10 @@ def merge_files(src_files, dst_file):
     dst_file.close()
 
 
-def split_file_with_info2(src_file, dst_path, num_files):
-    line_number = 0
-
-    #src_file = open(src_path, "r")
-    print("Splitting the files into {} files".format(num_files))
-    dst_file = []
-    dst_file_names= []
-    for i in np.arange(num_files):
-        file_name = "{}_{}".format(i, num_files)
-        dst_file.append([])
-        dst_file_names.append(file_name)
-
-    for line in src_file:
-        file_index = line_number % num_files
-        line = line.strip("\n")
-        dst_file[file_index].append(line+"\n") 
-        line_number += 1
-    i = 0
-    for file in dst_file:
-        put_object(dst_path,dst_file_names[i],bytes(''.join(file), encoding = "utf8"))
-        i = i+1
 
 
 if __name__ == "__main__":
-    src_file = "../dataset/agaricus_127d_train.libsvm"
-    dst_dir = "../dataset/datasplits"
-    # split_file_with_info(src_file, dst_dir, 5)
-    # dir = "../dataset/higgs-trigger"
-    # create_trigger_file(dir, 50)
+    #src_file = "../dataset/0_5"
+    dst_dir = "../dataset/rcv200"
+    for i in range(5):
+        split_file_with_info2(f"../dataset/{i}_5", dst_dir, i*40, 40, 200)
