@@ -37,8 +37,8 @@ def run(args):
     read_start = time.time()
     avg_error = np.iinfo(np.int16).max
 
-    train_file = open(args.train_root, 'r').readlines()
-    test_file = open(args.test_root, 'r').readlines()
+    train_file = open(args.train_file, 'r').readlines()
+    test_file = open(args.test_file, 'r').readlines()
 
     train_set, _, test_set = partition_agaricus(1, train_file, test_file)
     train_set = [t[0] for t in train_set]
@@ -96,8 +96,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('-k', '--num-clusters', type=float, default=20)
-    parser.add_argument('--train-root', type=str, default='data')
-    parser.add_argument('--test-root', type=str, default='data')
+    parser.add_argument('--train-file', type=str, default='data')
+    parser.add_argument('--test-file', type=str, default='data')
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--threshold', type=float, default=0.02)
     parser.add_argument('--features', type=int)
