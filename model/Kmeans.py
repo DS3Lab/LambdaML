@@ -47,10 +47,15 @@ def _move_centroids(points, closest, centroids):
 
 
 class Kmeans:
-    def __init__(self, data, centroids, error=np.iinfo(np.int16).max):
+    def __init__(self, data, centroids, error=np.iinfo(np.int16).max, centroid_type='numpy'):
         self.X = data
-        self.centroids = centroids
+        if centroid_type == 'numpy':
+            self.centroids = centroids
+        else:
+            # input centroids is a dense tensor
+            self.centroids = centroids.numpy()
         self.error = error
+
 
     def find_nearest_cluster(self):
         # centroids.shape: nr_clusters, data_dim

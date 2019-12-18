@@ -4,13 +4,11 @@ import numpy as np
 import torch
 from torch.utils.data.dataset import Dataset
 
-
-
 class SparseLibsvmDataset(Dataset):
 
     def __init__(self,
-                 lines,
-                 max_dim):
+             lines,
+             max_dim):
         self.max_dim = max_dim
         self.ins_list = []
         self.label_list = []
@@ -20,9 +18,14 @@ class SparseLibsvmDataset(Dataset):
             if ins is not None:
                 self.ins_list.append(ins[0])
                 self.label_list.append(ins[1])
+        print(f"nr entries: {len(self.ins_list)}")
 
     def parse_line(self, line):
         splits = line.split()
+        if line is None:
+            return
+        if len(splits) < 1:
+            return
         label = int(splits[0])
         indices_row = []
         indices_col = []
@@ -44,6 +47,7 @@ class SparseLibsvmDataset(Dataset):
 
     def __len__(self):
         return len(self.label_list)
+
 
 
 class DenseLibsvmDataset(Dataset):
@@ -103,6 +107,7 @@ class DenseLibsvmDataset2(Dataset):
                 self.label_list.append(ins[1])
         self.ins_np = np.array(self.ins_list_np)
         self.label_np = np.array(self.label_list).reshape(len(self.label_list), 1)
+
 
     def parse_line(self, line):
         splits = line.split()

@@ -51,14 +51,10 @@ def _get_error(old_cent, new_cent, num_clusters):
 
 
 class SparseKmeans(object):
-    def __init__(self, _data, _centroids, _nr_feature, _nr_cluster, _error=np.iinfo(np.int16).max, _centroids_type="list"):
+    def __init__(self, _data, _centroids, _nr_feature, _nr_cluster, _error=np.iinfo(np.int16).max):
         self.data = _data
         self.nr_feature = _nr_feature
-        self.centroids_type = _centroids_type
-        if _centroids_type == "tensor":
-            self.centroids = torch.tensor(_centroids).reshape(1, _nr_feature).to_sparse()
-        else:
-            self.centroids = [torch.tensor(c).reshape(1, _nr_feature).to_sparse() for c in _centroids]
+        self.centroids = [torch.tensor(c).reshape(1, _nr_feature).to_sparse() for c in _centroids]
         self.nr_cluster = _nr_cluster
         self.error = _error
         self.model = torch.zeros(self.nr_feature, 1)

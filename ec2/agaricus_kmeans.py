@@ -37,13 +37,18 @@ def run(args):
     read_start = time.time()
     avg_error = np.iinfo(np.int16).max
 
-    train_set, bsz, test_set = partition_agaricus(args.batch_size)  # train_set : list of torch
+    train_file = open(args.train_root, 'r').readlines()
+    test_file = open(args.test_root, 'r').readlines()
+
+    train_set, _, test_set = partition_agaricus(1, train_file, test_file)
+    train_set = [t[0] for t in train_set]
     print(f"Loading dataset costs {time.time() - read_start}s")
 
     # initialize centroids
     init_cent_start = time.time()
     if args.rank == 0:
-        centroids = torch.stack(train_set[:args.k])
+        c_dense_list = [t.to_dense() for t in train_set[:args.k]]
+        centroids = torch.stack(c_dense_list).reshape(args.k, args.features)
     else:
         centroids = torch.empty(args.k, args.features)
     dist.broadcast(centroids, 0)
@@ -53,7 +58,7 @@ def run(args):
     for epoch in range(args.epochs):
         if avg_error >= args.threshold:
             start_compute = time.time()
-            model = SparseKmeans(train_set, centroids, args.features, args.k, "tensor")
+            model = SparseKmeans(train_set, centroids, args.features, args.k)
             model.find_nearest_cluster()
             error = torch.tensor(model.error)
             end_compute = time.time()
@@ -76,7 +81,8 @@ def init_processes(rank, size, fn, backend='gloo'):
 
 def main():
     # python agaricus_kmeans.py --init-method tcp://172.31.1.2:24000 --rank 2 --world-size 10
-    # --root /home/ubuntu/code/data --no-cuda -k 20 --features 127
+    # --train-root /home/ubuntu/code/data/agaricus_127d_train.libsvm
+    # --test-root /home/ubuntu/code/data/agaricus_127d_test.libsvm --no-cuda -k 20 --features 127
     parser = argparse.ArgumentParser()
     parser.add_argument('--backend', type=str, default='gloo', help='Name of the backend to use.')
     parser.add_argument(
@@ -90,7 +96,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('-k', '--num-clusters', type=float, default=20)
-    parser.add_argument('--root', type=str, default='data')
+    parser.add_argument('--train-root', type=str, default='data')
+    parser.add_argument('--test-root', type=str, default='data')
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--threshold', type=float, default=0.02)
     parser.add_argument('--features', type=int)
