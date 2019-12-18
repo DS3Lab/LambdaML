@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import torch
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -58,3 +59,9 @@ class Kmeans:
         self.error = _l2_dist(self.centroids, new_centroids_vec)
         self.centroids = new_centroids_vec
         return
+
+    def get_centroids(self, centroids_type):
+        if centroids_type == "numpy":
+            return self.centroids
+        if centroids_type == "dense_tensor":
+            return torch.tensor(self.centroids)

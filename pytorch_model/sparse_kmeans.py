@@ -51,10 +51,14 @@ def _get_error(old_cent, new_cent, num_clusters):
 
 
 class SparseKmeans(object):
-    def __init__(self, _data, _centroids, _nr_feature, _nr_cluster, _error=np.iinfo(np.int16).max):
+    def __init__(self, _data, _centroids, _nr_feature, _nr_cluster, _error=np.iinfo(np.int16).max, _centroids_type="list"):
         self.data = _data
         self.nr_feature = _nr_feature
-        self.centroids = [torch.tensor(c).reshape(1, _nr_feature).to_sparse() for c in _centroids]
+        self.centroids_type = _centroids_type
+        if _centroids_type == "tensor":
+            self.centroids = torch.tensor(_centroids).reshape(1, _nr_feature).to_sparse()
+        else:
+            self.centroids = [torch.tensor(c).reshape(1, _nr_feature).to_sparse() for c in _centroids]
         self.nr_cluster = _nr_cluster
         self.error = _error
         self.model = torch.zeros(self.nr_feature, 1)
@@ -67,6 +71,16 @@ class SparseKmeans(object):
         self.centroids = new_centroids
         return
 
+    def get_centroids(self, centroids_type):
+        if centroids_type == "sparse_tensor":
+            return self.centroids
+        if centroids_type == "numpy":
+            cent_lst = [self.centroids[i].to_dense().numpy() for i in range(self.nr_cluster)]
+            centroid = np.array(cent_lst).reshape(self.nr_cluster, self.nr_feature)
+            return centroid
+        if centroids_type == "dense_tensor":
+            cent_tensor_lst = [self.centroids[i].to_dense() for i in range(self.nr_cluster)]
+            return torch.stack(cent_tensor_lst)
 
 
 if __name__ == "__main__":

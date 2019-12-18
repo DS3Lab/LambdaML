@@ -34,12 +34,10 @@ def get_new_centroids(dataset, dataset_type, old_centroids, epoch, num_features,
     compute_start = time.time()
     if dataset_type == "dense":
         model = Kmeans(dataset, old_centroids)
-        model.find_nearest_cluster()
-        res = model.centroids.reshape(-1)
     else:
         model = SparseKmeans(dataset, old_centroids, num_features, num_clusters)
-        model.find_nearest_cluster()
-        res = store_centroid_as_numpy(model.centroids, num_clusters).reshape(-1)
+    model.find_nearest_cluster()
+    res = model.get_centroids("numpy").reshape(-1)
 
     compute_end = time.time()
     logger.info(f"Epoch = {epoch} Error = {model.error}. Computation time: {compute_end - compute_start}")
