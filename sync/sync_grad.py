@@ -101,8 +101,8 @@ def merge_w_b(bucket_name, num_workers,
                     b_sum = b_sum + b_grad
                     num_b_files = num_b_files + 1
                     delete_object(bucket_name, file_key)    # do not put this outside 'if', in case of deleting w_ and b_
-        print("found {} w files: {}".format(len(w_files), w_files))
-        print("found {} b files: {}".format(len(b_files), b_files))
+        #print("found {} w files: {}".format(len(w_files), w_files))
+        #print("found {} b files: {}".format(len(b_files), b_files))
         # else:
         #     # Didn't get any keys
         #     print('No objects in {}'.format(bucket_name))
@@ -192,7 +192,7 @@ def clear_bucket(bucket_name):
         for obj in objects:
             file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
             file_names.append(file_key)
-        if len(file_names) > 1:
+        if len(file_names) >= 1:
             #print("delete files {} in bucket {}".format(file_names, bucket_name))
             delete_objects(bucket_name, file_names)
     return True
