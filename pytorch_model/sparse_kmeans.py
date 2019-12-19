@@ -19,7 +19,7 @@ def _closest_centroid(cent, data):
         min_sum = np.inf
         idx = 0
         for j in range(len(cent)):
-            tmp = _l2_dist_sq(data.ins_list[i], cent[j])
+            tmp = _l2_dist_sq(data[i], cent[j])
             if tmp < min_sum:
                 idx = j
                 min_sum = tmp
@@ -33,7 +33,7 @@ def _move_centroids(num_clusters, data, closest, cent):
     c_mean = [torch.sparse.FloatTensor(cent[0].size()[0], cent[0].size()[1]) for i in range(num_clusters)]
     c_count = [0 for i in range(num_clusters)]
     for i in range(len(data)):
-        c_mean[closest[i]] = torch.sparse.FloatTensor.add(data.ins_list[i], c_mean[closest[i]])
+        c_mean[closest[i]] = torch.sparse.FloatTensor.add(data[i], c_mean[closest[i]])
         c_count[closest[i]] += 1
     for i in range(num_clusters):
         c_mean[i] = torch.sparse.FloatTensor.div(c_mean[i], c_count[i])

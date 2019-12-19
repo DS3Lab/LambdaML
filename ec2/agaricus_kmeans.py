@@ -48,10 +48,10 @@ def run(args):
     # initialize centroids
     init_cent_start = time.time()
     if args.rank == 0:
-        c_dense_list = [t.to_dense() for t in train_set[:args.k]]
-        centroids = torch.stack(c_dense_list).reshape(args.k, args.features)
+        c_dense_list = [t.to_dense() for t in train_set[:args.num_clusters]]
+        centroids = torch.stack(c_dense_list).reshape(args.num_clusters, args.features)
     else:
-        centroids = torch.empty(args.k, args.features)
+        centroids = torch.empty(args.num_clusters, args.features)
     dist.broadcast(centroids, 0)
     print(f"Receiving initial centroids costs {time.time() - init_cent_start}s")
 
@@ -59,7 +59,7 @@ def run(args):
     for epoch in range(args.epochs):
         if avg_error >= args.threshold:
             start_compute = time.time()
-            model = SparseKmeans(train_set, centroids, args.features, args.k)
+            model = SparseKmeans(train_set, centroids, args.features, args.num_clusters)
             model.find_nearest_cluster()
             error = torch.tensor(model.error)
             end_compute = time.time()
@@ -96,7 +96,7 @@ def main():
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--no-cuda', action='store_true')
-    parser.add_argument('-k', '--num-clusters', type=float, default=20)
+    parser.add_argument('-k', '--num-clusters', type=int, default=20)
     parser.add_argument('--train-file', type=str, default='data')
     parser.add_argument('--test-file', type=str, default='data')
     parser.add_argument('--batch-size', type=int, default=128)
