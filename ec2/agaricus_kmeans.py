@@ -41,7 +41,7 @@ def run(args):
     train_file = open(args.train_file, 'r').readlines()
     test_file = open(args.test_file, 'r').readlines()
 
-    train_set, _, test_set = partition_agaricus(1, train_file, test_file)
+    train_set, _, _, test_set = partition_agaricus(1, train_file, test_file)
     train_set = [t[0] for t in train_set]
     print(f"Loading dataset costs {time.time() - read_start}s")
 
