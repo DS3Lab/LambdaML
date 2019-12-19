@@ -103,4 +103,4 @@ def partition_agaricus(batch_size, train_file, test_file):
         train_partition, batch_size=bsz, shuffle=True)
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, shuffle=True)
-    return train_loader, bsz, test_loader
+    return train_partition, train_loader, bsz, test_loader

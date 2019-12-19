@@ -30,7 +30,7 @@ def run(args):
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
     torch.manual_seed(1234)
 
-    train_loader, bsz, test_loader = partition_agaricus(args.batch_size, args.root, download=False)
+    _, train_loader, bsz, test_loader = partition_agaricus(args.batch_size, args.root, download=False)
     num_batches = ceil(len(train_loader.dataset) / float(bsz))
 
     model = LogisticRegression()
