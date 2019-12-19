@@ -90,12 +90,12 @@ def partition_cifar10(batch_size, path, download=True):
     return train_loader, bsz, test_loader
 
 
-def partition_agaricus(batch_size, train_file, test_file, download=True):
+def partition_agaricus(batch_size, train_file, test_file):
     train_dataset = SparseLibsvmDataset(train_file, 127)
     test_dataset = SparseLibsvmDataset(test_file, 127)
 
     size = dist.get_world_size()
-    bsz = int(batch_size / float(size))
+    bsz = 1 if batch_size == 1 else int(batch_size / float(size))
     train_partition_sizes = [1.0 / size for _ in range(size)]
     train_partition = DataPartitioner(train_dataset, train_partition_sizes)
     train_partition = train_partition.use(dist.get_rank())
