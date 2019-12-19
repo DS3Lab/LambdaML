@@ -76,6 +76,6 @@ def merge_files(src_files, dst_file):
 
 if __name__ == "__main__":
     #src_file = "../dataset/0_5"
-    dst_dir = "../dataset/rcv200"
+    dst_dir = "../dataset/rcv400"
     for i in range(5):
-        split_file_with_info2(f"../dataset/{i}_5", dst_dir, i*40, 40, 200)
+        split_file_with_info2(f"../dataset/{i}_5", dst_dir, i*80, 80, 400)

@@ -5,10 +5,11 @@ import sys
 import torch
 import torch.distributed as dist
 import numpy as np
-from ec2.data_partition import partition_agaricus
-from pytorch_model.sparse_kmeans import SparseKmeans
 
 sys.path.append("../")
+
+from ec2.data_partition import partition_agaricus
+from pytorch_model.sparse_kmeans import SparseKmeans
 
 
 def broadcast_average(args, centroid_tensor, error_tensor):
