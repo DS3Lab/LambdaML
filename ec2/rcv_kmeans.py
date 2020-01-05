@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.append("../")
 
-from ec2.data_partition import partition_agaricus
+from ec2.data_partition import partition_rcv
 from pytorch_model.sparse_kmeans import SparseKmeans
 
 
@@ -39,9 +39,8 @@ def run(args):
     avg_error = np.iinfo(np.int16).max
 
     train_file = open(args.train_file, 'r').readlines()
-    test_file = open(args.test_file, 'r').readlines()
 
-    train_set, _, _, test_set = partition_agaricus(1, train_file, test_file)
+    train_set = partition_rcv(train_file)
     train_set = [t[0] for t in train_set]
     print(f"Loading dataset costs {time.time() - read_start}s")
 
@@ -81,9 +80,6 @@ def init_processes(rank, size, fn, backend='gloo'):
 
 
 def main():
-    # python agaricus_kmeans.py --init-method tcp://172.31.1.2:24000 --rank 2 --world-size 10
-    # --train-root /home/ubuntu/code/data/agaricus_127d_train.libsvm
-    # --test-root /home/ubuntu/code/data/agaricus_127d_test.libsvm --no-cuda -k 20 --features 127
     parser = argparse.ArgumentParser()
     parser.add_argument('--backend', type=str, default='gloo', help='Name of the backend to use.')
     parser.add_argument(
@@ -94,14 +90,12 @@ def main():
         help='URL specifying how to initialize the package.')
     parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
-    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--no-cuda', action='store_true')
-    parser.add_argument('-k', '--num-clusters', type=int, default=20)
+    parser.add_argument('-k', '--num-clusters', type=int, default=10)
     parser.add_argument('--train-file', type=str, default='data')
-    parser.add_argument('--test-file', type=str, default='data')
-    parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--threshold', type=float, default=0.02)
-    parser.add_argument('--features', type=int)
+    parser.add_argument('--features', type=int, default=47236)
     parser.add_argument('--communication', type=str, default='all-reduce')
     args = parser.parse_args()
     print(args)

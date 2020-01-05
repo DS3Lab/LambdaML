@@ -35,7 +35,7 @@ def get_new_centroids(dataset, dataset_type, old_centroids, epoch, num_features,
     if dataset_type == "dense":
         model = Kmeans(dataset, old_centroids)
     else:
-        model = SparseKmeans(dataset, old_centroids, num_features, num_clusters)
+        model = SparseKmeans(dataset.ins_list, old_centroids, num_features, num_clusters)
     model.find_nearest_cluster()
     res = model.get_centroids("numpy").reshape(-1)
 
