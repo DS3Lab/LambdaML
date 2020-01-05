@@ -161,8 +161,8 @@ def handler(event, context):
                 total += labels.size(0)
                 correct += (predicted == labels).sum()
 
-            print('Accuracy of the model on the %d test samples: %d %%' % (
-            len(val_indices), 100 * correct / total))
+            print('Accuracy of the model on the %d test samples: %d %%'
+                  % (len(val_indices), 100 * correct / total))
 
         if worker_index == 0:
             clear_bucket(model_bucket)

@@ -108,7 +108,7 @@ def handler(event, context):
             #print("forward and backward cost {} s".format(time.time()-batch_start))
             optimizer.step()
 
-            print('Epoch: [%d/%d], Step: [%d/%d], Time: %.4f, Loss: %.4f, batch cost %.4f s'
+            print('Epoch: [%d/%d], Step: [%d/%d], Time: %.4f s, Loss: %.4f, batch cost %.4f s'
                     % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size,
                        time.time() - train_start, loss.data, time.time() - batch_start))
 
@@ -148,7 +148,7 @@ def handler(event, context):
             total += labels.size(0)
             correct += (predicted == labels).sum()
 
-        print('Time = %.4f, accuracy of the model on the %d test samples: %d %%, loss = %f'
+        print('Time = %.4f s, accuracy of the model on the %d test samples: %d %%, loss = %f'
               % (time.time() - train_start, len(val_indices), 100 * correct / total, test_loss))
 
     if worker_index == 0:
