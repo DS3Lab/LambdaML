@@ -1,6 +1,7 @@
 import os
 import numpy as np
 
+
 def random_files(num_files, path):
     for i in np.arange(num_files):
         w = np.random.rand(2, 3)
@@ -33,6 +34,7 @@ def split_file_with_info(src_path, dst_path, num_files):
     for file in dst_file:
         file.close()
 
+
 def split_file_with_info2(src_path, dst_path, start, num_files, total_files):
     line_number = 0
 
@@ -53,6 +55,7 @@ def split_file_with_info2(src_path, dst_path, start, num_files, total_files):
     for file in dst_file:
         file.close()
 
+
 def create_trigger_file(path, num_files):
     for i in np.arange(num_files):
         file_name = "{}_{}".format(i, num_files)
@@ -72,10 +75,7 @@ def merge_files(src_files, dst_file):
     dst_file.close()
 
 
-
-
 if __name__ == "__main__":
-    #src_file = "../dataset/0_5"
-    dst_dir = "../dataset/rcv400"
-    for i in range(5):
-        split_file_with_info2(f"../dataset/{i}_5", dst_dir, i*80, 80, 400)
+    src_dir = "/Users/jiawei/Downloads/HIGGS/HIGGS"
+    dst_dir = "/Users/jiawei/Downloads/HIGGS/"
+    split_file_with_info(src_dir, dst_dir, 10)

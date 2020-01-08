@@ -1,6 +1,14 @@
+import time
+
+import numpy as np
+
+import torch
 from torchvision import datasets, transforms
 import torch.distributed as dist
 from torch.utils.data import DataLoader
+from torch.utils.data.sampler import SubsetRandomSampler
+
+from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from data_loader.LibsvmDataset import SparseLibsvmDataset
 
 from random import Random
@@ -88,6 +96,36 @@ def partition_cifar10(batch_size, path, download=True):
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, shuffle=True)
     return train_loader, bsz, test_loader
+
+
+def partition_higgs(batch_size, file_name, validation_ratio):
+    parse_start = time.time()
+    f = open(file_name).readlines()
+    dataset = DenseLibsvmDataset2(f, 30)
+    print("parse data cost {} s".format(time.time() - parse_start))
+
+    preprocess_start = time.time()
+    dataset_size = len(dataset)
+    indices = list(range(dataset_size))
+    split = int(np.floor(validation_ratio * dataset_size))
+    random_seed = 42
+    np.random.seed(random_seed)
+    np.random.shuffle(indices)
+    train_indices, val_indices = indices[split:], indices[:split]
+
+    # Creating PT data samplers and loaders:
+    train_sampler = SubsetRandomSampler(train_indices)
+    valid_sampler = SubsetRandomSampler(val_indices)
+
+    train_loader = torch.utils.data.DataLoader(dataset,
+                                               batch_size=batch_size,
+                                               sampler=train_sampler)
+    test_loader = torch.utils.data.DataLoader(dataset,
+                                              batch_size=batch_size,
+                                              sampler=valid_sampler)
+
+    print("preprocess data cost {} s".format(time.time() - preprocess_start))
+    return train_loader, batch_size, test_loader
 
 
 def partition_agaricus(batch_size, train_file, test_file):
