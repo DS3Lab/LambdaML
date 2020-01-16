@@ -74,7 +74,7 @@ def run(args):
 def init_processes(rank, size, fn, backend='gloo'):
     """ Initialize the distributed environment. """
     os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '29500'
+    os.environ['MASTER_PORT'] = '24000'
     dist.init_process_group(backend, rank=rank, world_size=size)
     fn(rank, size)
 
@@ -86,7 +86,7 @@ def main():
         '-i',
         '--init-method',
         type=str,
-        default='tcp://127.0.0.1:23456',
+        default='tcp://127.0.0.1:22222',
         help='URL specifying how to initialize the package.')
     parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')

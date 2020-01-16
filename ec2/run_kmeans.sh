@@ -2,16 +2,15 @@
 
 world_size=$1
 # echo $world_size
+nr_cluster=$2
 
 for ((i=0; i<world_size; i++)); do
         if [ $i == 0 ]
         then
                 source /home/ubuntu/envs/pytorch/bin/activate
-                python3.6 /home/ubuntu/code/LambdaML/ec2/agaricus_kmeans.py --init-method tcp://172.31.1.2:24000 --rank 0 -k 20 --features 127 --world-size $world_size --train-file /home/ubuntu/code/LambdaML/dataset/agaricus_127d_train.libsvm --test-file /home/ubuntu/code/LambdaML/dataset/agaricus_127d_test.libsvm --no-cuda &
+                nohup python3.6 /home/ubuntu/fl/LambdaML/ec2/rcv_kmeans.py --init-method tcp://172.31.44.193:24000 --rank 0 --communication all-reduce -k $nr_cluster --world-size $world_size --train-file /home/ubuntu/data/rcv --no-cuda > log${i}_${nr_cluster}.txt 2>&1 & 
         else
-                ssh slave$i "source /home/ubuntu/envs/pytorch/bin/activate; python3.6 /home/ubuntu/code/LambdaML/ec2/agaricus_kmeans.py --init-method tcp://172.31.1.2:24000 --rank $i -k 20 --features 127 --world-size $world_size --train-file /home/ubuntu/code/LambdaML/dataset/agaricus_127d_train.libsvm --test-file /home/ubuntu/code/LambdaML/dataset/agaricus_127d_test.libsvm --no-cuda " &
+                ssh cluster20-node00$i "source /home/ubuntu/envs/pytorch/bin/activate; cd /home/ubuntu/fl/LambdaML/ec2; nohup python3.6 rcv_kmeans.py --init-method tcp://172.31.44.193:24000 --communication all-reduce --rank $i -k $nr_cluster --world-size $world_size --train-file /home/ubuntu/data/rcv --no-cuda > log${i}_${nr_cluster}.txt 2>&1 &" 
         fi
 done
 
-
-# python3.6 /home/ubuntu/code/LambdaML/ec2/agaricus_kmeans.py --init-method tcp://172.31.1.2:24000 --rank 0 -k 20 --features 127 --world-size 1 --train-file /home/ubuntu/code/LambdaML/dataset/agaricus_127d_train.libsvm --test-file /home/ubuntu/code/LambdaML/dataset/agaricus_127d_test.libsvm --no-cuda &
