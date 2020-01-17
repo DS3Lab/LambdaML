@@ -174,7 +174,7 @@ def delete_expired(bucket_name, cur_epoch, cur_batch, prefix):
                 key_batch = int(key_splits[-1])
                 key_epoch = int(key_splits[-2])
                 if key_epoch < cur_epoch or (key_epoch == cur_epoch and key_batch < cur_batch):
-                    print("delete object {} in bucket {}".format(file_key, bucket_name))
+                    # print("delete object {} in bucket {}".format(file_key, bucket_name))
                     delete_object(bucket_name, file_key)
 
 
