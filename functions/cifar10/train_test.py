@@ -157,90 +157,90 @@ def train(epoch, net, trainloader, optimizer, device, worker_index, num_worker, 
             # gradients = [param.grad.data.numpy() for param in net.parameters()]
             # print("[Worker {}] Gradients before sync = {}".format(worker_index, gradients[0][0]))
             
-            param_dic = {}
-            for index, param in enumerate(net.parameters()):
-                param_dic[index] = [param.grad.data.numpy().size, param.grad.data.numpy().shape]
-                if index == 0:
-                    flattened_param = param.grad.data.numpy().flatten()
-                else:
-                    flattened_param = np.concatenate((flattened_param, param.grad.data.numpy().flatten()))
+            # param_dic = {}
+            # for index, param in enumerate(net.parameters()):
+            #     param_dic[index] = [param.grad.data.numpy().size, param.grad.data.numpy().shape]
+            #     if index == 0:
+            #         flattened_param = param.grad.data.numpy().flatten()
+            #     else:
+            #         flattened_param = np.concatenate((flattened_param, param.grad.data.numpy().flatten()))
                     
-            comm_start = time.time()
+            # comm_start = time.time()
 
-            # merge gradients
-            file_postfix = "{}_{}".format(epoch, batch_idx)
-            merged_value = scatter_reduce(flattened_param, tmp_bucket, merged_bucket, num_worker, worker_index, file_postfix)
-            merged_value /= float(num_worker)
+            # # merge gradients
+            # file_postfix = "{}_{}".format(epoch, batch_idx)
+            # merged_value = scatter_reduce(flattened_param, tmp_bucket, merged_bucket, num_worker, worker_index, file_postfix)
+            # merged_value /= float(num_worker)
             
-            # print("scatter_reduce cost {} s".format(time.time() - comm_start))
+            # # print("scatter_reduce cost {} s".format(time.time() - comm_start))
 
-            # update the model gradients by layers
-            offset = 0
-            for layer_index, param in enumerate(net.parameters()):
+            # # update the model gradients by layers
+            # offset = 0
+            # for layer_index, param in enumerate(net.parameters()):
 
-                layer_size = param_dic[layer_index][0]
-                layer_shape = param_dic[layer_index][1]
+            #     layer_size = param_dic[layer_index][0]
+            #     layer_shape = param_dic[layer_index][1]
 
-                layer_value = merged_value[offset : offset + layer_size].reshape(layer_shape)
-                param.grad.data = torch.from_numpy(layer_value)
+            #     layer_value = merged_value[offset : offset + layer_size].reshape(layer_shape)
+            #     param.grad.data = torch.from_numpy(layer_value)
 
-                offset += layer_size
+            #     offset += layer_size
                 
-            if worker_index == 0:
-                delete_expired_merged(merged_bucket, epoch, batch_idx)
+            # if worker_index == 0:
+            #     delete_expired_merged(merged_bucket, epoch, batch_idx)
             #################################scatter_reduce####################################
             
             
             
             #################################reduce_broadcast####################################
-            # gradients = [param.grad.data.numpy() for param in net.parameters()]
-            # # print("[Worker {}] Gradients before sync = {}".format(worker_index, gradients[0][0]))
+            gradients = [param.grad.data.numpy() for param in net.parameters()]
+            # print("[Worker {}] Gradients before sync = {}".format(worker_index, gradients[0][0]))
             
-            # # put_object_start = time.time()
+            # put_object_start = time.time()
             
-            # put_object(tmp_bucket, gradients_prefix + str(worker_index), pickle.dumps(gradients))
+            put_object(tmp_bucket, gradients_prefix + str(worker_index), pickle.dumps(gradients))
             
-            # # print("write local gradients cost {} s".format(time.time() - put_object_start))
+            # print("write local gradients cost {} s".format(time.time() - put_object_start))
             
-            # file_postfix = "{}_{}".format(epoch, batch_idx)
-            # if worker_index == 0:
-            #     # merge all workers
+            file_postfix = "{}_{}".format(epoch, batch_idx)
+            if worker_index == 0:
+                # merge all workers
                 
-            #     # merged_value_start = time.time()
+                # merged_value_start = time.time()
                 
-            #     merged_value = \
-            #         merge_all_workers(tmp_bucket, num_worker, gradients_prefix)
+                merged_value = \
+                    merge_all_workers(tmp_bucket, num_worker, gradients_prefix)
                     
-            #     # print("merged_value cost {} s".format(time.time() - merged_value_start))
+                # print("merged_value cost {} s".format(time.time() - merged_value_start))
                 
-            #     # put_merged_start = time.time()
-            #     # upload merged value to S3
-            #     put_merged(merged_bucket, merged_value,
-            #                         gradients_prefix, file_postfix)
+                # put_merged_start = time.time()
+                # upload merged value to S3
+                put_merged(merged_bucket, merged_value,
+                                    gradients_prefix, file_postfix)
                                     
-            #     # print("put_merged cost {} s".format(time.time() - put_merged_start))                   
+                # print("put_merged cost {} s".format(time.time() - put_merged_start))                   
                 
-            #     # delete_expired(merged_bucket, epoch, batch_idx, gradients_prefix)
+                # delete_expired(merged_bucket, epoch, batch_idx, gradients_prefix)
                 
-            # else:
+            else:
                 
-            #     # read_merged_start = time.time()
-            #     # get merged value from S3
-            #     merged_value = get_merged(merged_bucket, gradients_prefix, file_postfix)
+                # read_merged_start = time.time()
+                # get merged value from S3
+                merged_value = get_merged(merged_bucket, gradients_prefix, file_postfix)
                 
-            #     # print("read_merged cost {} s".format(time.time() - read_merged_start))
+                # print("read_merged cost {} s".format(time.time() - read_merged_start))
                 
-            # # print("[Worker {}] Gradients after sync = {}".format(worker_index, merged_value[0][0]))
+            # print("[Worker {}] Gradients after sync = {}".format(worker_index, merged_value[0][0]))
             
-            # for layer_index, param in enumerate(net.parameters()):
-            #     param.grad.data = torch.from_numpy(merged_value[layer_index])
+            for layer_index, param in enumerate(net.parameters()):
+                param.grad.data = torch.from_numpy(merged_value[layer_index])
                 
-            # # gradients = [param.grad.data.numpy() for param in net.parameters()]
-            # # print("[Worker {}] Gradients after sync = {}".format(worker_index, gradients[0][0]))
-            # # print("synchronization cost {} s".format(time.time() - sync_start))
+            # gradients = [param.grad.data.numpy() for param in net.parameters()]
+            # print("[Worker {}] Gradients after sync = {}".format(worker_index, gradients[0][0]))
+            # print("synchronization cost {} s".format(time.time() - sync_start))
             
-            # if worker_index == 0:
-            #     delete_expired(merged_bucket, epoch, batch_idx, gradients_prefix)
+            if worker_index == 0:
+                delete_expired(merged_bucket, epoch, batch_idx, gradients_prefix)
                 
             #################################reduce_broadcast####################################
             
@@ -254,12 +254,12 @@ def train(epoch, net, trainloader, optimizer, device, worker_index, num_worker, 
         train_loss.update(loss.item(), inputs.size(0))
         
         if num_batch%10 == 0:
-            print("Epoch {} Batch {} training Loss:{}, Acc:{}".format(epoch, num_batch, train_loss, train_acc))
+            print("Epoch {} Batch {} training Loss:{}, Acc:{}".format(epoch+1, num_batch, train_loss, train_acc))
         
         num_batch += 1
         
     epoch_time = time.time() - epoch_start
-    print("Epoch {} has {} batches, time = {} s, sync time = {} s, cal time = {} s".format(epoch, num_batch, epoch_time, epoch_sync_time, epoch_time - epoch_sync_time))
+    print("Epoch {} has {} batches, time = {} s, sync time = {} s, cal time = {} s".format(epoch+1, num_batch, epoch_time, epoch_sync_time, epoch_time - epoch_sync_time))
     
     return train_loss, train_acc
 
