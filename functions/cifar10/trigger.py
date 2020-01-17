@@ -23,6 +23,7 @@ def handler(event,context):
     payload['data_bucket'] = bucket_name
 	# payload['model_bucket'] = 'model_bucket'
     payload['num_workers'] = num_workers
+    payload['roundID'] = 0
 	
 	# invoke functions
     lambda_client = boto3.client('lambda')
