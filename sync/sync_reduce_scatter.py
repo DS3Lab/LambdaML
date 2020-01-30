@@ -389,7 +389,7 @@ def reduce_scatter_epoch_multi_bucket(vector, tmp_bucket_prefix, merged_bucket_p
 
 
 # delete the merged values of the *current or older* steps
-def delete_expired_merged(bucket_name, cur_epoch, cur_batch):
+def delete_expired_merged_batch(bucket_name, cur_epoch, cur_batch):
     objects = list_bucket_objects(bucket_name)
     if objects is not None:
         file_names = []
