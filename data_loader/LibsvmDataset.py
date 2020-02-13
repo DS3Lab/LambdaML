@@ -49,7 +49,7 @@ class SparseLibsvmDataset(Dataset):
         return len(self.label_list)
 
 
-
+# input is local file path
 class DenseLibsvmDataset(Dataset):
 
     def __init__(self,
@@ -89,6 +89,7 @@ class DenseLibsvmDataset(Dataset):
         return len(self.label_list)
 
 
+# input is lines
 class DenseLibsvmDataset2(Dataset):
 
     def __init__(self,
@@ -107,7 +108,6 @@ class DenseLibsvmDataset2(Dataset):
                 self.label_list.append(ins[1])
         self.ins_np = np.array(self.ins_list_np)
         self.label_np = np.array(self.label_list).reshape(len(self.label_list), 1)
-
 
     def parse_line(self, line):
         splits = line.split()
