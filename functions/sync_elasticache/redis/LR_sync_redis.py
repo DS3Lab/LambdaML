@@ -48,7 +48,7 @@ def handler(event, context):
     key = event['name']
     num_features = event['num_features']
     num_classes = event['num_classes']
-    redis_location = event['redis']
+    redis_location = event['elasticache']
     endpoint = redis_init(redis_location)
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
