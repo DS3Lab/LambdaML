@@ -4,8 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch import distributed as dist
 import torch.nn
-
-from utils.print_utils import progress_bar
+#from utils.print_utils import progress_bar
 
 
 class Average(object):
@@ -56,6 +55,7 @@ class Trainer(object):
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.device = device
+        self.train_start = time.time()
 
     def average_gradients(self):
         """ Gradient averaging. """
@@ -68,7 +68,6 @@ class Trainer(object):
         for epoch in range(1, epochs + 1):
             train_loss, train_acc = self.train(epoch, is_dist)
             test_loss, test_acc = self.evaluate()
-
             print(
                 'Epoch: {}/{},'.format(epoch, epochs),
                 'train loss: {}, train acc: {},'.format(train_loss, train_acc),
@@ -80,7 +79,7 @@ class Trainer(object):
 
         epoch_start = time.time()
         num_batch = 0
-        sync_time = 0
+        total_sync_time = 0
 
         train_loss = Average()
         train_acc = Accuracy()
@@ -103,17 +102,26 @@ class Trainer(object):
                 self.average_gradients()
             self.optimizer.step()
 
-            sync_time += time.time() - sync_start
+            sync_time = time.time() - sync_start
+            total_sync_time += sync_time
             num_batch += 1
 
             train_loss.update(loss.item(), data.size(0))
             train_acc.update(output, target)
 
+            batch_time = time.time() - batch_start
+
+            print('Epoch: %d, Batch: %d, Time: %.4f s, Loss: %.4f, '
+                  'batch cost %.4f s, comm cost %.4f s, comp cost %.4f s'
+                  % (epoch + 1, batch_idx, time.time() - self.train_start,
+                     loss.data, batch_time, sync_time, batch_time - sync_time))
+
             #progress_bar(batch_idx, len(self.train_loader), 'Loss: {} | Acc: {}'.format(train_loss, train_acc))
 
         epoch_time = time.time() - epoch_start
-        print("Epoch {} has {} batches, time = {} s, sync time = {} s, cal time = {} s"
-              .format(epoch, num_batch, epoch_time, sync_time, epoch_time - sync_time))
+        print("Epoch {} has {} batches, time = {} s, epoch cost {} s, sync time = {} s, cal time = {} s"
+              .format(epoch, num_batch, time.time() - self.train_start,
+                      epoch_time, total_sync_time, epoch_time - total_sync_time))
 
         return train_loss, train_acc
 

@@ -92,6 +92,7 @@ def handler(event, context):
 
     # Training the Model
     for epoch in range(num_epochs):
+        epoch_start = time.time()
         for batch_index, (items, labels) in enumerate(train_loader):
             print("------worker {} epoch {} batch {}------".format(worker_index, epoch, batch_index))
             batch_start = time.time()
@@ -117,8 +118,9 @@ def handler(event, context):
         w = model.linear.weight.data.numpy()
         b = model.linear.bias.data.numpy()
         # print("dtype of weight = {}".format(w.dtype))
-        print("weight before sync = {}".format(w[0][0:5]))
-        print("bias before sync = {}".format(b))
+        #print("weight before sync = {}".format(w[0][0:5]))
+        #print("bias before sync = {}".format(b))
+        print("epoch {} calculation cost = {} s".format(epoch, time.time() - epoch_start))
 
         sync_start = time.time()
         put_object(model_bucket, "{}{}_{}".format(tmp_w_prefix, epoch, worker_index), w.tobytes())
@@ -143,7 +145,7 @@ def handler(event, context):
         print("weight after sync = {}".format(model.linear.weight.data.numpy()[0][:5]))
         print("bias after sync = {}".format(model.linear.bias.data.numpy()))
 
-        print("synchronization cost {} s".format(time.time() - sync_start))
+        print("epoch {} synchronization cost {} s".format(epoch, time.time() - sync_start))
 
     if worker_index == 0:
         clear_bucket(model_bucket)

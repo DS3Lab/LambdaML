@@ -34,15 +34,13 @@ def compute_average_centroids(avg_cent_bucket, worker_cent_bucket, num_workers, 
         else:
             print('No objects in {}'.format(worker_cent_bucket))
 
-    print("All workers are ready.")
     avg = avg_centroids(centroids_vec_list)
     avg_error = np.mean(np.array(error_list))
     clear_bucket(worker_cent_bucket)
 
-    print(f"Write averaged centroids {avg} for {epoch}-th epoch to bucket {avg_cent_bucket}")
-    print(f"Average error: {avg_error}")
+    print(f"Average error for {epoch}-th epoch: {avg_error}")
     res = avg.reshape(-1)
-    res = np.append(res, avg_error)
+    res = np.append(res, avg_error).astype(dt)
     put_object(avg_cent_bucket, f"avg-{epoch}", res.tobytes())
     return 1
 
