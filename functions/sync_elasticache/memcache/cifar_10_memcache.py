@@ -14,18 +14,17 @@ from s3.download_file import download_file
 from s3.put_object import put_object
 
 
-from sync.sync_grad_redis import *
+from sync.sync_grad_memcache import *
 from sync.sync_meta import SyncMeta
 
-from elasticache.Redis.__init__ import redis_init
-from elasticache.Redis.get_object import hget_object
-from elasticache.Redis.set_object import hset_object
-from elasticache.Redis.list_keys import hlist_keys
+from elasticache.Memcache.__init__ import memcache_init
+from elasticache.Memcache.get_object import hget_object
+from elasticache.Memcache.set_object import hset_object
+
 
 from s3.put_object import put_object
 
-from model.ResNet import *
-from model.mobilenet import *
+from pytorch_model.cifar10 import *
 
 local_dir = "/tmp"
 
@@ -40,7 +39,7 @@ sync_step = 1
 
 # learning algorithm setting
 learning_rate = 0.01
-batch_size = 32
+batch_size = 200
 num_epochs = 1
 
 merged_bucket = "merged-value-2"
@@ -56,8 +55,9 @@ def handler(event, context):
     #bucket = "cifar10dataset"
     bucket = event['data_bucket']
     worker_index = event['rank']
-    redis_location = event['redis']
-    endpoint = redis_init(redis_location)
+    elasti_location = event['elasticache']
+    endpoint = memcache_init(elasti_location)
+    #endpoint = elasti_location
     #worker_index = 0
     num_worker = event['num_workers']  
     #num_worker = 10
@@ -76,7 +76,9 @@ def handler(event, context):
     trainset = torch.load(train_path)
     testset= torch.load(test_path)
     print("read data cost {} s".format(time.time() - readS3_start))
-    print(trainset) 
+    #print(trainset) 
+    batch_size = 200
+    batch_size = int(np.ceil(batch_size/num_worker))
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
    
     testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False)
@@ -108,7 +110,7 @@ def handler(event, context):
     optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=5e-4)
     
     for epoch in range(num_epochs):
-        time_record = train(endpoint, epoch, net, trainloader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step)
+        train(endpoint, epoch, net, trainloader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step)
         test(epoch, net, testloader, criterion, device)
     
     put_object("time-record-s3","time_{}".format(worker_index),pickle.dumps(time_record))
@@ -120,13 +122,11 @@ def train(endpoint, epoch, net, trainloader, optimizer, criterion, device, worke
     # train_loss = 0
     # correct = 0
     # total = 0
-    sync_epoch_time = []
-    write_local_epoch_time = []
-    calculation_epoch_time = []
+    end = 0
+    batch_start = time.time()
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-
+        
         print("------worker {} epoch {} batch {}------".format(worker_index, epoch+1, batch_idx+1))
-        batch_start = time.time()
 
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
@@ -134,58 +134,9 @@ def train(endpoint, epoch, net, trainloader, optimizer, criterion, device, worke
         loss = criterion(outputs, targets)
         loss.backward()
        
-        tmp_calculation_time = time.time()-batch_start
-        print("forward and backward cost {} s".format(tmp_calculation_time))
-        if batch_idx != 0:
-            calculation_epoch_time.append(tmp_calculation_time)
-        if sync_mode == 'model_avg':
+  
+ 
 
-            # apply local gradient to local model
-            optimizer.step()
-            # average model
-            if (batch_idx+1) % sync_step == 0:
-                
-                sync_start = time.time()
-                
-                # get current weights
-                weights = [param.data.numpy() for param in net.parameters()]
-                # print("[Worker {}] Weights before sync = {}".format(worker_index, weights[0][0]))
-
-                # upload updated weights to S3
-                
-                #hset_object(endpoint, tmp_bucket, weights_prefix + str(worker_index), pickle.dumps(weights))
-                put_object_start = time.time()
-                put_object(tmp_bucket, weights_prefix + str(worker_index), pickle.dumps(weights))
-                tmp_write_local_peoch_time = time.time()-put_object_start
-                print("writing local gradients in s3 cost {}".format(tmp_write_local_epoch_time))
-                if batch_idx != 0:
-                    write_local_epoch_time.append(tmp_write_local_epoch_time)
-                file_postfix = "{}_{}".format(epoch, batch_idx)
-                if worker_index == 0:
-                    # merge all workers
-                    merged_value = \
-                        merge_w_b_layers(endpoint, tmp_bucket, num_worker, weights_prefix)
-                    #while sync_counter(endpoint, model_bucket, num_worker):
-                    #    time.sleep(0.0001)
-                    # upload merged value to S3
-                    put_merged_w_b_layers(endpoint, merged_bucket, merged_value,
-                                        weights_prefix, file_postfix)
-
-                    delete_expired_w_b_layers(endpoint, merged_bucket, epoch, batch_idx, weights_prefix)
-                    
-                else:
-                    # get merged value from S3
-                    merged_value = get_merged_w_b_layers(endpoint, merged_bucket, weights_prefix, file_postfix)
-                
-                # update the model with averaged model
-                for layer_index, param in enumerate(net.parameters()):
-                    param.data = torch.nn.Parameter(torch.from_numpy(merged_value[layer_index]))
-                  
-                tmp_sync_time = time.time() - sync_start
-                print("synchronization cost {} s".format(tmp_sync_time))
-                
-                if batch_idx != 0:
-                    sync_epoch_time.append(tmp_sync_time)
                     
         if sync_mode == 'grad_avg':
             
@@ -196,48 +147,35 @@ def train(endpoint, epoch, net, trainloader, optimizer, criterion, device, worke
             
             
             put_object_start = time.time()
-            
-            hset_object(endpoint, tmp_bucket, gradients_prefix + str(worker_index), pickle.dumps(gradients))
+            sync_start = time.time()
+            print(hset_object(endpoint, tmp_bucket, gradients_prefix + str(worker_index), pickle.dumps(gradients)))
             
             tmp_write_local_epoch_time = time.time()-put_object_start
-            print("writing local gradients in redis cost {}".format(tmp_write_local_epoch_time))
-            if batch_idx != 0:
-                write_local_epoch_time.append(tmp_write_local_epoch_time)
+            print("writing local gradients in elasticache cost {}".format(tmp_write_local_epoch_time))
+        
             
-            
-            
-                
             file_postfix = "{}_{}".format(epoch, batch_idx)
             if worker_index == 0:
                 # merge all workers
                 
-                merged_value_start = time.time()
+                
                 
                 merged_value = \
                     merge_w_b_layers(endpoint, tmp_bucket, num_worker, gradients_prefix)
-                    
-                print("merged_value cost {} s".format(time.time() - merged_value_start))
-                
-                
-                
-                
-                put_merged_start = time.time()
-                # upload merged value to S3
+   
+                # upload merged value to elasticache
                 put_merged_w_b_layers(endpoint, merged_bucket, merged_value,
                                     gradients_prefix, file_postfix)
                                     
-                print("put_merged cost {} s".format(time.time() - put_merged_start))                   
-                
-
-                delete_expired_w_b_layers(endpoint, merged_bucket, epoch, batch_idx, gradients_prefix)
+                #if batch_idx > end:
+                #    end = end+1
+                #delete_expired_w_b_layers(endpoint, merged_bucket, epoch, batch_idx, gradients_prefix,end)
                 
             else:
                 
-                read_merged_start = time.time()
+                
                 # get merged value from redis
                 merged_value = get_merged_w_b_layers(endpoint, merged_bucket, gradients_prefix, file_postfix)
-                
-                print("read_merged cost {} s".format(time.time() - read_merged_start))
                 
               
                 
@@ -246,27 +184,23 @@ def train(endpoint, epoch, net, trainloader, optimizer, criterion, device, worke
                 
             
                 
-            tmp_sync_time = time.time() - sync_start
-            print("synchronization cost {} s".format(tmp_sync_time))
+        tmp_sync_time = time.time() - sync_start
+        print("synchronization cost {} s".format(tmp_sync_time))
                 
-            if batch_idx != 0:
-                sync_epoch_time.append(tmp_sync_time)
-            
-            if worker_index == 0:
-                delete_expired_w_b_layers(endpoint, merged_bucket, epoch, batch_idx, gradients_prefix)
                 
-            optimizer.step()
-            
+        optimizer.step()
+           
     
-            
+        print("batch cost = {}".format(time.time()-batch_start))
+        batch_start = time.time()    
         # train_loss += loss.item()
         # _, predicted = outputs.max(1)
         # total += targets.size(0)
         # correct += predicted.eq(targets).sum().item()
-        print("batch cost {} s".format(time.time() - batch_start))
+        #print("batch cost {} s".format(time.time() - batch_start))
         if (batch_idx + 1) % 1 == 0:
             print('Epoch: {}, Step: {}, Loss:{}'.format(epoch+1, batch_idx+1, loss.data))
-    return sync_epoch_time,write_local_epoch_time,calculation_epoch_time
+    #return sync_epoch_time,write_local_epoch_time,calculation_epoch_time
 
 
 def test(epoch, net, testloader, criterion, device):

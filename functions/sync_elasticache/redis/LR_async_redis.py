@@ -2,7 +2,6 @@ import time
 import urllib.parse
 import logging
 import numpy as np
-import pickle
 
 import torch
 from torch.autograd import Variable
@@ -22,8 +21,8 @@ from sync.sync_meta import SyncMeta
 
 # lambda setting
 
-grad_bucket = "async-grads"
-model_bucket = "async-updates"
+grad_bucket = "higgs-grads"
+model_bucket = "higgs-updates"
 local_dir = "/tmp"
 w_prefix = "w_"
 b_prefix = "b_"
@@ -33,8 +32,8 @@ b_grad_prefix = "b_grad_"
 # algorithm setting
 
 learning_rate = 0.1
-batch_size = 100000
-num_epochs = 5
+batch_size = 32
+num_epochs = 2
 validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
@@ -59,7 +58,7 @@ def handler(event, context):
     #num_worker = int(key_splits[1])
     num_worker = event['num_files']
 
-    batch_size = 200000
+    batch_size = 10000
     batch_size = int(np.ceil(batch_size/num_worker))
     
     sync_meta = SyncMeta(worker_index, num_worker)
@@ -106,8 +105,7 @@ def handler(event, context):
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
     
     
-    test_loss = []
-    train_loss = []
+    
     # Training the Model
     for epoch in range(num_epochs):
         for batch_index, (items, labels) in enumerate(train_loader):
@@ -122,34 +120,37 @@ def handler(event, context):
             loss = criterion(outputs, labels)
             loss.backward()
             
-            w = model.linear.weight.data.numpy()
-            b = model.linear.bias.data.numpy()
-            print("b before merge = ",b)
-            file_postfix = "{}_{}".format(batch_index,epoch)
-            #asynchronization / shuffle starts from that every worker writes their gradients of this batch and epoch
-            #upload individual gradient
-            hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
-            hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
-            tmp_w_dtype = w.dtype
-            tmp_b_dtype = b.dtype
-            tmp_w_shape = w.shape
-            tmp_b_shape = b.shape
+            w_grad = model.linear.weight.grad.data.numpy()
+            b_grad = model.linear.bias.grad.data.numpy()
+            print("w_grad before merge = {}".format(w_grad[0][0:5]))
+            print("b_grad before merge = {}".format(b_grad))
             
-            time.sleep(0.1)#
+            #asynchronization / shuffle starts from that every worker writes their gradients of this batch and epoch
+            import sys
+            print("model size = {}".format((sys.getsizeof(w_grad.tobytes())+sys.getsizeof(b_grad.tobytes()))/1024/1024))
+            #upload individual gradient
+            hset_object(endpoint, model_bucket, w_grad_prefix , w_grad.tobytes())
+            hset_object(endpoint, model_bucket, b_grad_prefix , b_grad.tobytes())
+            tmp_w_dtype = w_grad.dtyep()
+            tmp_b_dtype = b_grad.dtyep()
+            tmp_w_shape = w_grad.shape()
+            tmp_b_shape = b_grad.shape()
             #randomly get one gradient from others. (Asynchronized)
-            w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = tmp_w_dtype).reshape(tmp_w_shape)
-            b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = tmp_b_dtype).reshape(tmp_b_shape)	
-            model.linear.weight.data = torch.from_numpy(w_new)
-            model.linear.bias.data = torch.from_numpy(b_new)
+            w_grad = np.fromstring(hget_object(endpoint, model_bucket, w_grad_prefix),dtype = tmp_w_dtype).reshape(tmp_w_shape)
+            b_grad = np.fromstring(hget_object(endpoint, model_bucket, b_grad_prefix),dtype = tmp_b_dtype).reshape(tmp_b_shape)	
+            model.linear.weight.grad = Variable(torch.from_numpy(w_grad))
+            model.linear.bias.grad = Variable(torch.from_numpy(b_grad))
+
+            print("w_grad after merge = {}".format(model.linear.weight.grad.data.numpy()[0][:5]))
+            print("b_grad after merge = {}".format(model.linear.bias.grad.data.numpy()))
             optimizer.step()
-            print("b after merge = ",b_new)
+
             print("batch cost {} s".format(time.time() - batch_start))
             #report train loss and test loss for every mini batch
             if (batch_index + 1) % 1 == 0:
                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
                       % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
-            
-            train_loss.append(loss.data)
+    		
             # Test the Model
             correct = 0
             total = 0
@@ -159,10 +160,8 @@ def handler(event, context):
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum()
-            test_loss.append(correct / total)
+
             print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
 
     endTs = time.time()
     print("elapsed time = {} s".format(endTs - startTs))
-    loss = np.array([train_loss,test_loss])
-    put_object("time-record-redis","loss_{}".format(worker_index),pickle.dumps(loss))

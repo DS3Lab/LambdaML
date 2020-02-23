@@ -1,6 +1,7 @@
+import argparse
 import os
 import numpy as np
-from s3.put_object import put_object
+#from s3.put_object import put_object
 
 def random_files(num_files, path):
     for i in np.arange(num_files):
@@ -69,7 +70,7 @@ def split_file_with_info2(src_file, dst_path, num_files):
     for line in src_file:
         file_index = line_number % num_files
         line = line.strip("\n")
-        dst_file[file_index].append(line+"\n") 
+        dst_file[file_index].append(line+"\n")
         line_number += 1
     i = 0
     for file in dst_file:
@@ -79,7 +80,12 @@ def split_file_with_info2(src_file, dst_path, num_files):
 
 
 if __name__ == "__main__":
-    src_file = "../dataset/agaricus_127d_train.libsvm"
-    dst_dir = "../dataset/datasplits"
-    split_file_with_info(src_file, dst_dir, 5)
-
+    #parser = argparse.ArgumentParser()
+    #parser.add_argument('--num-file', type=integer, help='Name of the backend to use.')
+    #args = parser.parse_args()
+    #src_file = "/scratch/HIGGS"    
+    #dst_dir = "/scratch/higgs/".format(num_file)
+    #os.remove(dst_dir)
+    src_file = "../higgs"
+    dst_dir = "../dataset/"	
+    split_file_with_info(src_file, dst_dir,10)
