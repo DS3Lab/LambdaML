@@ -62,28 +62,29 @@ def run(args):
     trainer.fit(args.epochs, is_dist=dist_is_initialized())
 
 
-def init_processes(rank, size, fn, backend='gloo'):
-    """ Initialize the distributed environment. """
-    os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '29500'
-    dist.init_process_group(backend, rank=rank, world_size=size)
-    fn(rank, size)
+# def init_processes(rank, size, fn, backend='gloo'):
+#     """ Initialize the distributed environment. """
+#     os.environ['MASTER_ADDR'] = '127.0.0.1'
+#     os.environ['MASTER_PORT'] = '29500'
+#     dist.init_process_group(backend, rank=rank, world_size=size)
+#     fn(rank, size)
 
 
-def run_local():
-    size = 2
-    processes = []
-    for rank in range(size):
-        p = Process(target=init_processes, args=(rank, size, run))
-        p.start()
-        processes.append(p)
+# def run_local():
+#     size = 2
+#     processes = []
+#     for rank in range(size):
+#         p = Process(target=init_processes, args=(rank, size, run))
+#         p.start()
+#         processes.append(p)
 
-    for p in processes:
-        p.join()
+#     for p in processes:
+#         p.join()
 
 
 def main():
     parser = argparse.ArgumentParser()
+    
     parser.add_argument('--backend', type=str, default='gloo', help='Name of the backend to use.')
     parser.add_argument(
         '-i',
@@ -93,6 +94,8 @@ def main():
         help='URL specifying how to initialize the package.')
     parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
+
+
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)
