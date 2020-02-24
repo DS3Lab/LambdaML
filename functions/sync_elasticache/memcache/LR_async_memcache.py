@@ -7,28 +7,31 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from elasticache.Redis.set_object import hset_object
-from elasticache.Redis.counter import hcounter
-from elasticache.Redis.get_object import hget_object
-from elasticache.Redis.__init__ import redis_init
+from elasticache.Memcache.set_object import hset_object
+from elasticache.Memcache.get_object import hget_object
+from elasticache.Memcache.__init__ import memcache_init
 from s3.get_object import get_object
 from s3.put_object import put_object
-from sync.sync_grad_redis import *
+from sync.sync_grad_memcache import *
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
+
+
 # lambda setting
 
-grad_bucket = "higgs-grads"
-model_bucket = "higgs-updates"
+grad_bucket = "async-grads"
+model_bucket = "async-updates"
 local_dir = "/tmp"
 w_prefix = "w_"
 b_prefix = "b_"
+w_grad_prefix = "w_grad_"
+b_grad_prefix = "b_grad_"
 
 # algorithm setting
 
-learning_rate = 0.1
+learning_rate = 0.1#np.arange(0.09,0.15,0.01)
 batch_size = 100000
 num_epochs = 55
 validation_ratio = .2
@@ -39,7 +42,7 @@ random_seed = 42
 
 
 def handler(event, context):
-
+    
     startTs = time.time()
     bucket = event['bucket']
     key = event['name']
@@ -49,7 +52,7 @@ def handler(event, context):
     endpoint = memcache_init(elasti_location)
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
-
+  
     key_splits = key.split("_")
     worker_index = int(key_splits[0])
     #num_worker = int(key_splits[1])
@@ -59,10 +62,10 @@ def handler(event, context):
     batch_size = int(np.ceil(batch_size/num_worker))
     
     torch.manual_seed(random_seed)
-
+    
     sync_meta = SyncMeta(worker_index, num_worker)
     print("synchronization meta {}".format(sync_meta.__str__()))
-
+    
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
     print("read data cost {} s".format(time.time() - startTs))
@@ -70,7 +73,7 @@ def handler(event, context):
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
     print("libsvm operation cost {}s".format(parse_start - preprocess_start))
-
+   
     # Creating data indices for training and validation splits:
     dataset_size = len(dataset)
     print("dataset size = {}".format(dataset_size))
@@ -91,29 +94,29 @@ def handler(event, context):
     validation_loader = torch.utils.data.DataLoader(dataset,
                                                     batch_size=batch_size,
                                                     sampler=valid_sampler)
-
+    
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
-
-
+    
     model = LogisticRegression(num_features, num_classes)
+    
 
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-
+    
     train_loss = []
     test_loss = []
     test_acc = []
-    epoch_time = 0
+    total_time = 0
     # Training the Model
     epoch_start = time.time()
     for epoch in range(num_epochs):
         tmp_train = 0
         for batch_index, (items, labels) in enumerate(train_loader):
+            #batch_start = time.time()
             print("------worker {} epoch {} batch {}------".format(worker_index, epoch, batch_index))
-            batch_start = time.time()
             items = Variable(items.view(-1, num_features))
             labels = Variable(labels)
 
@@ -122,75 +125,55 @@ def handler(event, context):
             outputs = model(items)
             loss = criterion(outputs, labels)
             loss.backward()
-
-
+            
+            w = model.linear.weight.data.numpy()
+            b = model.linear.bias.data.numpy()
+            file_postfix = "{}_{}".format(batch_index,epoch)
+            #asynchronization / shuffle starts from that every worker writes their gradients of this batch and epoch
+            #upload individual gradient
+            hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
+            hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
+            
+            time.sleep(0.0001)#
+            #randomly get one gradient from others. (Asynchronized)
+            w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
+            b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)	
+            model.linear.weight.data = torch.from_numpy(w_new)
+            model.linear.bias.data = torch.from_numpy(b_new)
             optimizer.step()
+            
+            #report train loss and test loss for every mini batch
             if (batch_index + 1) % 1 == 0:
                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
                       % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
-            tmp_train = tmp_train+loss.item()
-        train_loss.append(tmp_train/(batch_index+1))
-        #sync model
-        w_model = model.linear.weight.data.numpy()
-        b_model = model.linear.bias.data.numpy()
-        epoch_time = time.time()-epoch_start + epoch_time
-        #synchronization starts from that every worker writes their model after this epoch
-        sync_start = time.time()
-        hset_object(endpoint, grad_bucket, w_prefix + str(worker_index), w_model.tobytes())
-        hset_object(endpoint, grad_bucket, b_prefix + str(worker_index), b_model.tobytes())
-        tmp_write_local_epoch_time = time.time()-sync_start
-        print("write local model cost = {}".format(tmp_write_local_epoch_time))
+            tmp_train += loss.item()
+        total_time += time.time()-epoch_start
+        train_loss.append(tmp_train)
+        
+        tmp_test,tmp_acc = test(model,validation_loader,criterion)
+        test_loss.append(tmp_test)
+        test_acc.append(tmp_acc)
+        epoch_start = time.time()
+        
+    print("total time = {}".format(total_time))
+    endTs = time.time()
+    print("elapsed time = {} s".format(endTs - startTs))
+    loss_record = [test_loss,test_acc,train_loss,total_time]
+    put_object("async-model-loss","async-loss{}".format(worker_index),pickle.dumps(loss_record))
 
-        #merge gradients among files
-        file_postfix = "{}".format(epoch)
-
-        if worker_index == 0:
-            merge_start = time.time()
-            w_model_merge, b_model_merge = \
-                merge_w_b_grads(endpoint,
-                                grad_bucket, num_worker, w_model.dtype,
-                                w_model.shape, b_model.shape,
-                                w_prefix, b_prefix)
-
-            put_merged_w_b_grads(endpoint,model_bucket,
-                                w_model_merge, b_model_merge, file_postfix,
-                                w_prefix, b_prefix)
-
-
-        else:
-
-            w_model_merge, b_model_merge = get_merged_w_b_grads(endpoint,model_bucket, file_postfix,
-                                                                w_model.dtype, w_model.shape, b_model.shape,
-                                                                w_prefix, b_prefix)
-
-        model.linear.weight.data = Variable(torch.from_numpy(w_model_merge))
-        model.linear.bias.data = Variable(torch.from_numpy(b_model_merge))
-
-        tmp_sync_time = time.time() - sync_start
-        print("synchronization cost {} s".format(tmp_sync_time))
-
-
-        # Test the Model
-        correct = 0
-        total = 0
-        count = 0
-        tmp_test = 0
-        for items, labels in validation_loader:
-            items = Variable(items.view(-1, num_features))
+def test(model,testloader,criterion):
+    # Test the Model
+    correct = 0
+    total = 0
+    total_loss = 0
+    count = 0
+    with torch.no_grad():
+        for items,labels in testloader:
             outputs = model(items)
-            loss = criterion(outputs, labels)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum()
-            tmp_test = tmp_test + loss.item()
+            loss = criterion(outputs,labels)
+            total_loss+=loss.data
             count = count+1
-        #print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
-        test_acc.append(100 * correct / total)
-        test_loss.append(tmp_test/count)
-        epoch_start = time.time()
-    endTs = time.time()
-    print("elapsed time = {} s".format(endTs - startTs))
-    loss_record = [test_loss,test_acc,train_loss,epoch_time]
-    put_object("model-average-loss","average_loss{}".format(worker_index),pickle.dumps(loss_record))
-    
-        
+    return total_loss/count, float(correct)/float(total)*100

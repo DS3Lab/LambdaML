@@ -7,17 +7,17 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from elasticache.Redis.set_object import hset_object
-from elasticache.Redis.counter import hcounter
-from elasticache.Redis.get_object import hget_object
-from elasticache.Redis.__init__ import redis_init
+from elasticache.Memcache.set_object import hset_object
+from elasticache.Memcache.get_object import hget_object
+from elasticache.Memcache.__init__ import memcache_init
 from s3.get_object import get_object
 from s3.put_object import put_object
-from sync.sync_grad_redis import *
+from sync.sync_grad_memcache import *
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
+
 # lambda setting
 
 grad_bucket = "higgs-grads"
