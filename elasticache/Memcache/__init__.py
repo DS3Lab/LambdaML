@@ -13,15 +13,13 @@ import logging
 import memcache
 from botocore.exceptions import ClientError
 
-def memcache_init(client):
+def memcache_init(endpoint):
     port = 11211
     try:
-        client = client+":"+str(port)
-        client = memcache.Client([client],flush_on_reconnect=1)
-        #client = memcache.Client(['convergence.fifamc.cfg.euc1.cache.amazonaws.com:11211'],)
-        client.flush_all()
+        endpoint = endpoint+":"+str(port)
+        client = memcache.Client([endpoint])
     except ClientError as e:
-        # AllAccessDisabled error == client not found
+        # AllAccessDisabled error == endpoint not found
         logging.error(e)
         return False
     return client
