@@ -79,27 +79,6 @@ def delete_expired(bucket_name, cur_epoch, cur_batch, prefix):
 
 
 #mergence for single file
-
-def merge_np_bytes(endpoint, bucket_name, num_workers, dtype, shape):
-    num_files = 0
-    sum_arr = np.zeros(shape, dtype=dtype)
-
-    while num_files < num_workers:
-        objects = hlist_keys(endpoint,bucket_name)
-        if objects is not None:
-            for obj in objects:
-                file_key = bytes.decode(obj)
-                print('file in bucket {} = {}'.format(bucket_name, file_key))
-                tmp_arr = np.fromstring(hget_object(endpoint,bucket_name,file_key),dtype).reshape(shape)
-                print("the {}-th numpy array".format(num_files))
-                print(tmp_arr)
-                sum_arr = sum_arr + tmp_arr
-                num_files = num_files + 1
-                hdelete_keys(endpoint,bucket_name,[file_key])
-        else:
-            # Didn't get any keys
-            print('No objects in {}'.format(bucket_name))
-    return sum_arr
    
 def merge_w_b_grads(endpoint, bucket_name, num_workers,
                     dtype, w_shape, b_shape,
@@ -133,7 +112,7 @@ def merge_w_b_grads(endpoint, bucket_name, num_workers,
             #print("the keys being deleted = {}".format(objects))
         
         
-    return w_grad_sum, b_grad_sum
+    return w_grad_sum/float(num_workers), b_grad_sum/float(num_workers)
 
                                                                  
 def put_merged_w_b_grad(endpoint, bucket_name, w_grad, b_grad,
