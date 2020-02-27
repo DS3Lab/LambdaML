@@ -13,7 +13,7 @@ class LogisticRegression(torch.nn.Module):
         super(LogisticRegression, self).__init__()
         self.linear = torch.nn.Linear(_num_features, _num_classes)
 
-    # torch.nn.CrossEntropyLoss includes softmax, so we don't need sigmoid here?
+    # torch.nn.CrossEntropyLoss includes softmax, so we don't need sigmoid here
     def forward(self, x):
         # y_pred = torch.sigmoid(self.linear(x))
         y_pred = self.linear(x)
