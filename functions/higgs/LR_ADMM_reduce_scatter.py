@@ -26,15 +26,15 @@ num_classes = 2
 learning_rate = 0.01
 batch_size = 10000
 num_epochs = 10
-num_admm_epochs = 10
-validation_ratio = .1
+num_admm_epochs = 5
+validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
 ep_abs=1e-4
 ep_rel=1e-2
 
 
-def initialize_Z_and_U(shape):
+def initialize_z_and_u(shape):
     z = np.random.rand(shape[0], shape[1]).astype(np.double)
     u = np.random.rand(shape[0], shape[1]).astype(np.double)
     return z, u
@@ -44,12 +44,18 @@ def update_z_u(w, z, u, rho, n, lam_0):
     z_new = w + u
     z_tem = abs(z_new) - lam_0 / float(n * rho)
     z_new = np.sign(z_new) * z_tem * (z_tem > 0)
-    print("z_new shape = {}".format(z_new.shape))
 
     s = z_new - z
     r = w - np.ones(w.shape[0] * w.shape[1]).astype(np.float).reshape(w.shape) * z_new
     u_new = u + r
-    return z_new, u_new, r, s
+    return z_new, s, r, s
+
+
+def update_z(w, u, rho, n, lam_0):
+    z_new = w + u
+    z_tem = abs(z_new) - lam_0 / float(n * rho)
+    z_new = np.sign(z_new) * z_tem * (z_tem > 0)
+    return z_new
 
 
 def check_stop(ep_abs, ep_rel, r, s, n, p, w, z, u, rho):
@@ -119,7 +125,7 @@ def handler(event, context):
     model = LogisticRegression(num_features, num_classes).double()
     print("size of w = {}".format(model.linear.weight.data.size()))
 
-    z, u = initialize_Z_and_U(model.linear.weight.data.size())
+    z, u = initialize_z_and_u(model.linear.weight.data.size())
     print("size of z = {}".format(z.shape))
     print("size of u = {}".format(u.shape))
 
@@ -127,7 +133,7 @@ def handler(event, context):
     # Softmax is internally computed.
     # Set parameters to be updated.
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
     # Training the Model
     train_start = time.time()
@@ -136,6 +142,7 @@ def handler(event, context):
         print("ADMM Epoch >>> {}".format(admm_epoch))
         for epoch in range(num_epochs):
             epoch_start = time.time()
+            epoch_loss = 0
             for batch_index, (items, labels) in enumerate(train_loader):
                 #   print("------worker {} epoch {} batch {}------".format(worker_index, epoch, batch_index))
                 batch_start = time.time()
@@ -146,8 +153,13 @@ def handler(event, context):
                 optimizer.zero_grad()
                 outputs = model(items.double())
                 classify_loss = criterion(outputs, labels)
-                loss = classify_loss \
-                       + rho / 2.0 * torch.norm(model.linear.weight.data - torch.from_numpy(z).double() + torch.from_numpy(u).double())
+                epoch_loss += classify_loss.data
+                u_z = torch.from_numpy(u).double() - torch.from_numpy(z).double()
+                loss = classify_loss
+                for name, param in model.named_parameters():
+                    if name.split('.')[-1] == "weight":
+                        loss += rho / 2.0 * torch.norm(param + u_z, p=2)
+                #loss = classify_loss + rho / 2.0 * torch.norm(torch.sum(model.linear.weight, u_z))
                 optimizer.zero_grad()
                 loss.backward(retain_graph=True)
                 optimizer.step()
@@ -171,55 +183,60 @@ def handler(event, context):
                   'batch cost %.4f s: test cost %.4f s, '
                   'accuracy of the model on the %d test samples: %d %%, loss = %f'
                   % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size,
-                     time.time() - train_start, loss.data, time.time() - epoch_start,
+                     time.time() - train_start, epoch_loss.data, time.time() - epoch_start,
                      time.time() - batch_start, test_time,
                      len(val_indices), 100 * correct / total, test_loss / total))
 
-        w = model.linear.weight.grad.data.numpy()
+        w = model.linear.weight.data.numpy()
         w_shape = w.shape
-        b = model.linear.bias.grad.data.numpy()
+        b = model.linear.bias.data.numpy()
         b_shape = b.shape
+        u_shape = u.shape
 
         w_and_b = np.concatenate((w.flatten(), b.flatten()))
-        print("Epoch {} calculation cost = {} s".format(epoch, time.time() - epoch_start))
+        u_w_b = np.concatenate((u.flatten(), w_and_b.flatten()))
+        cal_time = time.time() - epoch_start
+        print("Epoch {} calculation cost = {} s".format(epoch, cal_time))
 
         sync_start = time.time()
         postfix = "{}_{}".format(admm_epoch, epoch)
-        w_and_b_merge = reduce_scatter_batch(w_and_b,
-                                             tmp_bucket, merged_bucket, num_workers, worker_index, postfix)
-        w = w_and_b_merge[:w_shape[0] * w_shape[1]].reshape(w_shape) / float(num_workers)
-        b = w_and_b_merge[w_shape[0] * w_shape[1]:].reshape(b_shape[0]) / float(num_workers)
+        u_w_b_merge = reduce_scatter_batch(u_w_b, tmp_bucket, merged_bucket, num_workers, worker_index, postfix)
+        u_mean = u_w_b_merge[:u_shape[0] * u_shape[1]].reshape(u_shape) / float(num_workers)
+        w_mean = u_w_b_merge[u_shape[0]*u_shape[1] : u_shape[0]*u_shape[1]+w_shape[0]*w_shape[1]].reshape(w_shape) / float(num_workers)
+        b_mean = u_w_b_merge[u_shape[0]*u_shape[1]+w_shape[0]*w_shape[1]:].reshape(b_shape[0]) / float(num_workers)
         #model.linear.weight.data = torch.from_numpy(w)
-        model.linear.bias.data = torch.from_numpy(b)
-        print("Epoch {} synchronization cost {} s".format(epoch, time.time() - sync_start))
+        model.linear.bias.data = torch.from_numpy(b_mean)
+        sync_time = time.time() - sync_start
+        print("Epoch {} synchronization cost {} s".format(epoch, sync_time))
 
         if worker_index == 0:
             delete_expired_merged(merged_bucket, epoch)
 
-        z, u, r, s = update_z_u(w, z, u, rho, num_features, lam)
-        stop = check_stop(ep_abs, ep_rel, r, s, dataset_size, num_features, w, z, u, rho)
-        print("stop = {}".format(stop))
+        #z, u, r, s = update_z_u(w, z, u, rho, num_workers, lam)
+        #stop = check_stop(ep_abs, ep_rel, r, s, dataset_size, num_features, w, z, u, rho)
+        #print("stop = {}".format(stop))
 
-        z = rho / (2 * lam + rho) * (w + u)
+        #z = num_workers * rho / (2 * lam + num_workers * rho) * (w + u_mean)
+        z = update_z(w_mean, u_mean, rho, num_workers, lam)
         #print(z)
-        u = u + w - z
+        u = u + model.linear.weight.data.numpy() - z
         #print(u)
 
-        # Test the Model
-        correct = 0
-        total = 0
-        test_loss = 0
-        for items, labels in validation_loader:
-            items = Variable(items.view(-1, num_features))
-            labels = Variable(labels)
-            outputs = model(items.double())
-            test_loss += criterion(outputs, labels).data
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum()
+    # Test the Model
+    correct = 0
+    total = 0
+    test_loss = 0
+    for items, labels in validation_loader:
+        items = Variable(items.view(-1, num_features))
+        labels = Variable(labels)
+        outputs = model(items.double())
+        test_loss += criterion(outputs, labels).data
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum()
 
-        print('Epoch: %d, time = %.4f, accuracy of the model on the %d test samples: %d %%, loss = %f'
-              % (epoch, time.time() - train_start, len(val_indices), 100 * correct / total, test_loss / total))
+    print('Epoch: %d, time = %.4f, accuracy of the model on the %d test samples: %d %%, loss = %f'
+          % (epoch, time.time() - train_start, len(val_indices), 100 * correct / total, test_loss / total))
 
 
     if worker_index == 0:

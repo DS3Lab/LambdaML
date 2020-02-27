@@ -1,18 +1,16 @@
 import time
-import urllib.parse
-import logging
 import numpy as np
 
 import torch
 from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from sync.sync_grad import *
-from sync.sync_reduce_scatter import reduce_scatter_batch, delete_expired_merged
+from s3.get_object import get_object
+from s3.clear_bucket import clear_bucket
+from sync.sync_reduce import reduce_batch, delete_expired_merged_batch
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
-
 
 # lambda setting
 # file_bucket = "higgs-libsvm"
@@ -34,7 +32,7 @@ ep_abs=1e-4
 ep_rel=1e-2
 
 
-def initialize_Z_and_U(shape):
+def initialize_z_and_u(shape):
     z = np.random.rand(shape[0], shape[1]).astype(np.double)
     u = np.random.rand(shape[0], shape[1]).astype(np.double)
     return z, u
@@ -125,7 +123,7 @@ def handler(event, context):
     model = LogisticRegression(num_features, num_classes).double()
     print("size of w = {}".format(model.linear.weight.data.size()))
 
-    z, u = initialize_Z_and_U(model.linear.weight.data.size())
+    z, u = initialize_z_and_u(model.linear.weight.data.size())
     print("size of z = {}".format(z.shape))
     print("size of u = {}".format(u.shape))
 
@@ -200,7 +198,7 @@ def handler(event, context):
 
         sync_start = time.time()
         postfix = "{}_{}".format(admm_epoch, epoch)
-        u_w_b_merge = reduce_scatter_batch(u_w_b, tmp_bucket, merged_bucket, num_workers, worker_index, postfix)
+        u_w_b_merge = reduce_batch(u_w_b, tmp_bucket, merged_bucket, num_workers, worker_index, postfix)
         u_mean = u_w_b_merge[:u_shape[0] * u_shape[1]].reshape(u_shape) / float(num_workers)
         w_mean = u_w_b_merge[u_shape[0]*u_shape[1] : u_shape[0]*u_shape[1]+w_shape[0]*w_shape[1]].reshape(w_shape) / float(num_workers)
         b_mean = u_w_b_merge[u_shape[0]*u_shape[1]+w_shape[0]*w_shape[1]:].reshape(b_shape[0]) / float(num_workers)
@@ -210,7 +208,7 @@ def handler(event, context):
         print("Epoch {} synchronization cost {} s".format(epoch, sync_time))
 
         if worker_index == 0:
-            delete_expired_merged(merged_bucket, epoch)
+            delete_expired_merged_batch(merged_bucket, admm_epoch, epoch)
 
         #z, u, r, s = update_z_u(w, z, u, rho, num_workers, lam)
         #stop = check_stop(ep_abs, ep_rel, r, s, dataset_size, num_features, w, z, u, rho)
@@ -237,7 +235,6 @@ def handler(event, context):
 
     print('Epoch: %d, time = %.4f, accuracy of the model on the %d test samples: %d %%, loss = %f'
           % (epoch, time.time() - train_start, len(val_indices), 100 * correct / total, test_loss / total))
-
 
     if worker_index == 0:
         clear_bucket(merged_bucket)

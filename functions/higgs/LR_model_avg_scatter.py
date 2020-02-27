@@ -86,7 +86,8 @@ def handler(event, context):
                                                     batch_size=batch_size,
                                                     sampler=valid_sampler)
 
-    print("preprocess data cost {} s".format(time.time() - preprocess_start))
+    print("preprocess data cost {} s, dataset size = {}"
+          .format(time.time() - preprocess_start, dataset_size))
 
     model = LogisticRegression(num_features, num_classes)
 
