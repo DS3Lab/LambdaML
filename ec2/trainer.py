@@ -49,7 +49,7 @@ class Accuracy(object):
 
 class Trainer(object):
 
-    def __init__(self, model, optimizer, train_loader, test_loader, args, device=torch.device("cpu")):
+    def __init__(self, model, optimizer, train_loader, test_loader, device=torch.device("cpu")):
         self.model = model
         self.optimizer = optimizer
         self.train_loader = train_loader

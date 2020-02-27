@@ -36,7 +36,7 @@ def run(args):
     model = LogisticRegression()
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
 
-    trainer = Trainer(model, optimizer, train_loader, test_loader, args, device)
+    trainer = Trainer(model, optimizer, train_loader, test_loader, device)
 
     trainer.fit(args.epochs, is_dist=dist_is_initialized())
 

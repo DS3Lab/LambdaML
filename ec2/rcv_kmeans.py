@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.append("../")
 
-from ec2.data_partition import partition_rcv
+from ec2.data_partition import partition_sparse
 from pytorch_model.sparse_kmeans import SparseKmeans
 
 
@@ -40,7 +40,7 @@ def run(args):
 
     train_file = open(args.train_file, 'r').readlines()
 
-    train_set = partition_rcv(train_file)
+    train_set = partition_sparse(train_file, args.features)
     train_set = [t[0] for t in train_set]
     print(f"Loading dataset costs {time.time() - read_start}s")
 
