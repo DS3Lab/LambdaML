@@ -7,7 +7,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 from s3.get_object import get_object
 from s3.clear_bucket import clear_bucket
-from sync.sync_reduce import reduce_batch, delete_expired_merged_batch
+from sync.sync_reduce import reduce_epoch, delete_expired_merged_epoch
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
@@ -22,9 +22,9 @@ local_dir = "/tmp"
 num_features = 30
 num_classes = 2
 learning_rate = 0.01
-batch_size = 10000
+batch_size = 300
 num_epochs = 10
-num_admm_epochs = 5
+num_admm_epochs = 30
 validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
@@ -73,8 +73,12 @@ def handler(event, context):
     key = event['file']
     tmp_bucket = event['tmp_bucket']
     merged_bucket = event['merged_bucket']
+    num_epochs = event['num_epochs']
+    num_admm_epochs = event['num_admm_epochs']
+    learning_rate = event['learning_rate']
     lam = event['lambda']
     rho = event['rho']
+    batch_size = event['batch_size']
 
     print('bucket = {}'.format(bucket))
     print("file = {}".format(key))
@@ -82,8 +86,12 @@ def handler(event, context):
     print('worker index = {}'.format(worker_index))
     print('tmp bucket = {}'.format(tmp_bucket))
     print('merge bucket = {}'.format(merged_bucket))
+    print('num epochs = {}'.format(num_epochs))
+    print('num admm epochs = {}'.format(num_admm_epochs))
+    print('learning rate = {}'.format(learning_rate))
     print("lambda = {}".format(lam))
     print("rho = {}".format(rho))
+    print("batch_size = {}".format(batch_size))
 
     # read file from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
@@ -197,8 +205,9 @@ def handler(event, context):
         print("Epoch {} calculation cost = {} s".format(epoch, cal_time))
 
         sync_start = time.time()
-        postfix = "{}_{}".format(admm_epoch, epoch)
-        u_w_b_merge = reduce_batch(u_w_b, tmp_bucket, merged_bucket, num_workers, worker_index, postfix)
+        postfix = "{}".format(admm_epoch)
+        u_w_b_merge = reduce_epoch(u_w_b, tmp_bucket, merged_bucket, num_workers, worker_index, postfix)
+
         u_mean = u_w_b_merge[:u_shape[0] * u_shape[1]].reshape(u_shape) / float(num_workers)
         w_mean = u_w_b_merge[u_shape[0]*u_shape[1] : u_shape[0]*u_shape[1]+w_shape[0]*w_shape[1]].reshape(w_shape) / float(num_workers)
         b_mean = u_w_b_merge[u_shape[0]*u_shape[1]+w_shape[0]*w_shape[1]:].reshape(b_shape[0]) / float(num_workers)
@@ -208,7 +217,7 @@ def handler(event, context):
         print("Epoch {} synchronization cost {} s".format(epoch, sync_time))
 
         if worker_index == 0:
-            delete_expired_merged_batch(merged_bucket, admm_epoch, epoch)
+            delete_expired_merged_epoch(merged_bucket, admm_epoch)
 
         #z, u, r, s = update_z_u(w, z, u, rho, num_workers, lam)
         #stop = check_stop(ep_abs, ep_rel, r, s, dataset_size, num_features, w, z, u, rho)

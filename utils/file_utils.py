@@ -1,6 +1,5 @@
 import os
 import numpy as np
-#from s3.put_object import put_object
 
 def random_files(num_files, path):
     for i in np.arange(num_files):
@@ -75,7 +74,6 @@ def split_file_with_info2(src_file, dst_path, num_files):
     for file in dst_file:
         put_object(dst_path,dst_file_names[i],bytes(''.join(file), encoding = "utf8"))
         i = i+1
-
 
 
 if __name__ == "__main__":

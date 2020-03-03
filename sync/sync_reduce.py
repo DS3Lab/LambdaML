@@ -18,8 +18,8 @@ def reduce_batch(vector, tmp_bucket, merged_bucket, num_workers, worker_index, p
     merged_vec = np.zeros(vec_shape, dtype=vec_dtype)
 
     postfix_splits = postfix.split("_")
-    curr_epoch = postfix_splits[0]
-    curr_batch = postfix_splits[1]
+    curr_epoch = int(postfix_splits[0])
+    curr_batch = int(postfix_splits[1])
 
     # put object to s3, format of key: workerID_epoch_batch
     key = "{}_{}".format(worker_index, postfix)
@@ -62,7 +62,7 @@ def reduce_epoch(vector, tmp_bucket, merged_bucket, num_workers, worker_index, p
     vec_dtype = vector.dtype
     merged_vec = np.zeros(vec_shape, dtype=vec_dtype)
 
-    curr_epoch = postfix
+    curr_epoch = int(postfix)
 
     # put object to s3, format of key: workerID_epoch
     key = "{}_{}".format(worker_index, postfix)
