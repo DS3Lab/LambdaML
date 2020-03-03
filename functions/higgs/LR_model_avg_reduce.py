@@ -8,7 +8,10 @@ from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from sync.sync_grad import *
-from sync.sync_reduce_scatter import reduce_scatter_epoch, delete_expired_merged
+from s3.get_object import get_object
+from s3.clear_bucket import clear_bucket
+from sync.sync_reduce import reduce_epoch, delete_expired_merged_epoch
+
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
@@ -16,20 +19,21 @@ from sync.sync_meta import SyncMeta
 
 # lambda setting
 file_bucket = "higgs-libsvm"
-# tmp_bucket = "tmp-grads"
-# merged_bucket = "merged-params"
+#model_bucket = "tmp-params"
 local_dir = "/tmp"
-w_prefix = "w_"
-b_prefix = "b_"
-tmp_w_prefix = "tmp_w_"
-tmp_b_prefix = "tmp_b_"
+# merged model format: w_{epoch}
+# tmp model format: tmp_w_{epoch}_{worker_id}
+# w_prefix = "w_"
+# b_prefix = "b_"
+# tmp_w_prefix = "tmp_w_"
+# tmp_b_prefix = "tmp_b_"
 
 # algorithm setting
 num_features = 30
 num_classes = 2
 learning_rate = 0.01
-batch_size = 10000
-num_epochs = 40
+batch_size = 1000
+num_epochs = 2
 validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
@@ -37,25 +41,25 @@ random_seed = 42
 
 def handler(event, context):
     start_time = time.time()
-    start_time = time.time()
     bucket = event['bucket_name']
     worker_index = event['rank']
     num_workers = event['num_workers']
     key = event['file']
     tmp_bucket = event['tmp_bucket']
     merged_bucket = event['merged_bucket']
+    num_epochs = event['num_epochs']
+    learning_rate = event['learning_rate']
+    batch_size = event['batch_size']
 
     print('bucket = {}'.format(bucket))
+    print("file = {}".format(key))
+    print('tmp bucket = {}'.format(tmp_bucket))
+    print('merged bucket = {}'.format(merged_bucket))
     print('number of workers = {}'.format(num_workers))
     print('worker index = {}'.format(worker_index))
-    print("file = {}".format(key))
-    print('bucket = {}'.format(bucket))
-    print('key = {}'.format(key))
-    key_splits = key.split("_")
-    worker_index = int(key_splits[0])
-    num_worker = int(key_splits[1])
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
+    print('num epochs = {}'.format(num_epochs))
+    print('learning rate = {}'.format(learning_rate))
+    print("batch size = {}".format(batch_size))
 
     # read file from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
@@ -97,8 +101,8 @@ def handler(event, context):
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
-    train_start = time.time()
     # Training the Model
+    train_start = time.time()
     for epoch in range(num_epochs):
         epoch_start = time.time()
         epoch_loss = 0
@@ -114,37 +118,8 @@ def handler(event, context):
             loss = criterion(outputs, labels)
             epoch_loss += loss.data
             loss.backward()
-            # print("forward and backward cost {} s".format(time.time()-batch_start))
+
             optimizer.step()
-
-            # print('Epoch: [%d/%d], Step: [%d/%d], Time: %.4f s, Loss: %.4f, batch cost %.4f s'
-            #        % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size,
-            #           time.time() - train_start, loss.data, time.time() - batch_start))
-
-        w = model.linear.weight.data.numpy()
-        w_shape = w.shape
-        b = model.linear.bias.data.numpy()
-        b_shape = b.shape
-        # print("weight before sync shape = {}, values = {}".format(w.shape, w))
-        # print("bias before sync shape = {}, values = {}".format(b.shape, b))
-        w_and_b = np.concatenate((w.flatten(), b.flatten()))
-        cal_time = time.time() - epoch_start
-        # print("Epoch {} calculation cost = {} s".format(epoch, cal_time))
-
-        sync_start = time.time()
-        postfix = str(epoch)
-        w_and_b_merge = reduce_scatter_epoch(w_and_b, tmp_bucket, merged_bucket, num_worker, worker_index, postfix)
-        w_merge = w_and_b_merge[:w_shape[0] * w_shape[1]].reshape(w_shape) / float(num_worker)
-        b_merge = w_and_b_merge[w_shape[0] * w_shape[1]:].reshape(b_shape[0]) / float(num_worker)
-        model.linear.weight.data = torch.from_numpy(w_merge)
-        model.linear.bias.data = torch.from_numpy(b_merge)
-        # print("weight after sync = {}".format(model.linear.weight.data.numpy()[0][:5]))
-        # print("bias after sync = {}".format(model.linear.bias.data.numpy()))
-        sync_time = time.time() - sync_start
-        # print("Epoch {} synchronization cost {} s".format(epoch, sync_time))
-
-        if worker_index == 0:
-            delete_expired_merged(merged_bucket, epoch)
 
         # Test the Model
         test_start = time.time()
@@ -162,16 +137,74 @@ def handler(event, context):
         test_time = time.time() - test_start
 
         print('Epoch: [%d/%d], Step: [%d/%d], Time: %.4f, Loss: %.4f, epoch cost %.4f, '
-              'batch cost %.4f s: calculation cost = %.4f s, synchronization cost %.4f s, test cost %.4f s, '
+              'batch cost %.4f s: test cost %.4f s, '
               'accuracy of the model on the %d test samples: %d %%, loss = %f'
               % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size,
                  time.time() - train_start, epoch_loss.data, time.time() - epoch_start,
-                 time.time() - batch_start, cal_time, sync_time, test_time,
+                 time.time() - batch_start, test_time,
                  len(val_indices), 100 * correct / total, test_loss / total))
 
+        w = model.linear.weight.data.numpy()
+        w_shape = w.shape
+        b = model.linear.bias.data.numpy()
+        b_shape = b.shape
+        w_and_b = np.concatenate((w.flatten(), b.flatten()))
+        cal_time = time.time() - epoch_start
+        print("Epoch {} calculation cost = {} s".format(epoch, cal_time))
+
+        sync_start = time.time()
+        postfix = "{}".format(epoch)
+        u_w_b_merge = reduce_epoch(w_and_b, tmp_bucket, merged_bucket, num_workers, worker_index, postfix)
+
+        w_mean = u_w_b_merge[: w_shape[0] * w_shape[1]].reshape(w_shape) / float(num_workers)
+        b_mean = u_w_b_merge[w_shape[0] * w_shape[1]:].reshape(b_shape[0]) / float(num_workers)
+        model.linear.weight.data = torch.from_numpy(w_mean)
+        model.linear.bias.data = torch.from_numpy(b_mean)
+        sync_time = time.time() - sync_start
+        print("Epoch {} synchronization cost {} s".format(epoch, sync_time))
+
+        if worker_index == 0:
+            delete_expired_merged_epoch(merged_bucket, epoch)
+        #
+        #
+        # #file_postfix = "{}_{}".format(epoch, worker_index)
+        # if epoch < num_epochs - 1:
+        #     if worker_index == 0:
+        #         w_merge, b_merge = merge_w_b(model_bucket, num_workers, w.dtype,
+        #                                      w.shape, b.shape, tmp_w_prefix, tmp_b_prefix)
+        #         put_merged_w_b(model_bucket, w_merge, b_merge,
+        #                        str(epoch), w_prefix, b_prefix)
+        #         delete_expired_w_b_by_epoch(model_bucket, epoch, tmp_w_prefix, tmp_b_prefix)
+        #         model.linear.weight.data = torch.from_numpy(w_merge)
+        #         model.linear.bias.data = torch.from_numpy(b_merge)
+        #     else:
+        #         w_merge, b_merge = get_merged_w_b(model_bucket, str(epoch), w.dtype,
+        #                                           w.shape, b.shape, w_prefix, b_prefix)
+        #         model.linear.weight.data = torch.from_numpy(w_merge)
+        #         model.linear.bias.data = torch.from_numpy(b_merge)
+
+        #print("weight after sync = {}".format(model.linear.weight.data.numpy()[0][:5]))
+        #print("bias after sync = {}".format(model.linear.bias.data.numpy()))
+
+        # print("epoch {} synchronization cost {} s".format(epoch, time.time() - sync_start))
+
+    # Test the Model
+    correct = 0
+    total = 0
+    for items, labels in validation_loader:
+        items = Variable(items.view(-1, num_features))
+        # items = Variable(items)
+        outputs = model(items)
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum()
+
+    print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
+
     if worker_index == 0:
-        clear_bucket(tmp_bucket)
         clear_bucket(merged_bucket)
+        clear_bucket(tmp_bucket)
 
     end_time = time.time()
     print("Elapsed time = {} s".format(end_time - start_time))
+

@@ -4,18 +4,20 @@ import os
 import sys
 import torch
 import torch.distributed as dist
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 
 from math import ceil
 from torch.multiprocessing import Process
 
 sys.path.append("../")
+sys.path.append("../../")
 
-from ec2.trainer import Trainer
-from pytorch_model.sparse_lr import LogisticRegression
-from ec2.data_partition import partition_rcv_kmeans
+from ec2.svm.svm_trainer import Trainer
+from ec2.data_partition import partition_higgs
+from pytorch_model.higgs import SVM
+
+
+validation_ratio = .2
 
 
 def dist_is_initialized():
@@ -30,13 +32,15 @@ def run(args):
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
     torch.manual_seed(1234)
 
-    _, train_loader, bsz, test_loader = partition_rcv_kmeans(args.batch_size, args.root, download=False)
+    file_name = "{}/{}_{}".format(args.root, args.rank, args.world_size)
+    print("read file {}".format(file_name))
+    train_loader, bsz, test_loader = partition_higgs(args.batch_size, file_name, validation_ratio)
     num_batches = ceil(len(train_loader.dataset) / float(bsz))
 
-    model = LogisticRegression()
-    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
+    model = SVM()
+    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate)
 
-    trainer = Trainer(model, optimizer, train_loader, test_loader, args, device)
+    trainer = Trainer(model, optimizer, train_loader, test_loader, device)
 
     trainer.fit(args.epochs, is_dist=dist_is_initialized())
 

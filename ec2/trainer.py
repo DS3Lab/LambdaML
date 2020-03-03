@@ -111,10 +111,10 @@ class Trainer(object):
 
             batch_time = time.time() - batch_start
 
-            print('Epoch: %d, Batch: %d, Time: %.4f s, Loss: %.4f, '
-                  'batch cost %.4f s, comm cost %.4f s, comp cost %.4f s'
-                  % (epoch + 1, batch_idx, time.time() - self.train_start,
-                     loss.data, batch_time, sync_time, batch_time - sync_time))
+            # print('Epoch: %d, Batch: %d, Time: %.4f s, Loss: %.4f, '
+            #       'batch cost %.4f s, comm cost %.4f s, comp cost %.4f s'
+            #       % (epoch + 1, batch_idx, time.time() - self.train_start,
+            #          loss.data, batch_time, sync_time, batch_time - sync_time))
 
             #progress_bar(batch_idx, len(self.train_loader), 'Loss: {} | Acc: {}'.format(train_loss, train_acc))
 
