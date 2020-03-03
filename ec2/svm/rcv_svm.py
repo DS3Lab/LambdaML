@@ -1,21 +1,15 @@
 import argparse
-
 import os
 import sys
-import torch
-import torch.distributed as dist
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
+import time
 
-from math import ceil
+import torch.distributed as dist
 from torch.multiprocessing import Process
 
 sys.path.append("../")
 
-from ec2.trainer import Trainer
-from pytorch_model.sparse_svm import SparseSVM
-from ec2.data_partition import partition_rcv_kmeans
+from pytorch_model.sparse_svm import *
+from ec2.data_partition import partition_sparse
 
 
 def dist_is_initialized():
@@ -25,20 +19,63 @@ def dist_is_initialized():
     return False
 
 
+def broadcast_average(args, weights):
+    all_weights = []
+    avg_w = torch.zeros(weights.shape)
+    if args.rank == 0:
+        torch.distributed.gather(weights, all_weights)
+        tensor_sum = torch.zeros(weights.shape)
+        for c in all_weights:
+            tensor_sum += c
+        avg_w = c/args.world_size
+        dist.broadcast(avg_w, 0)
+    else:
+        dist.send(weights, 0)
+    return avg_w
+
+
 def run(args):
-    """ Distributed Synchronous SGD Example """
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
+    read_start = time.time()
     torch.manual_seed(1234)
 
-    _, train_loader, bsz, test_loader = partition_rcv_kmeans(args.batch_size, args.root, download=False)
-    num_batches = ceil(len(train_loader.dataset) / float(bsz))
+    train_file = open(args.train_file, 'r').readlines()
+    dataset = partition_sparse(train_file, args.features)
+    dataset = [t[0] for t in dataset]
+    print(f"Loading dataset costs {time.time() - read_start}s")
 
-    model = SparseSVM()
-    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
+    preprocess_start = time.time()
+    dataset_size = len(dataset)
+    indices = list(range(dataset_size))
+    split = int(np.floor(0.2 * dataset_size))
+    if args.shuffle:
+        np.random.seed(42)
+        np.random.shuffle(indices)
+    train_indices, val_indices = indices[split:], indices[:split]
 
-    trainer = Trainer(model, optimizer, train_loader, test_loader, args, device)
+    train_set = [dataset[i] for i in train_indices]
+    val_set = [dataset[i] for i in val_indices]
+    print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
-    trainer.fit(args.epochs, is_dist=dist_is_initialized())
+    svm = SparseSVM(train_set, val_set, 127, args.epochs, args.lr, args.batch_size)
+    training_start = time.time()
+    for epoch in range(args.epochs):
+        num_batches = math.floor(len(train_set)/args.batch_size)
+        start_compute = time.time()
+        for batch_idx in range(num_batches):
+            batch_start = time.time()
+            batch_loss, batch_acc = svm.one_epoch(batch_idx, epoch)
+            print(f"{args.rank}-th worker . Takes {time.time() - batch_start}")
+            print(f"Batch loss: {batch_loss}, validation accuracy: {batch_acc}")
+            batch_end = time.time()
+            svm.weights = broadcast_average(svm.weights.numpy().flatten()).reshape(args.features, 1)
+            print(f"{args.rank}-th worker finishes sychronizing. Takes {time.time() - batch_end}")
+
+        val_loss, val_acc = svm.evaluate()
+        print(f"Validation loss: {val_loss}, validation accuracy: {val_acc}")
+        print(f"Epoch takes {time.time() - start_compute}s")
+
+    print(f"Finishes training. {args.epochs} takes {time.time() - training_start}s.")
 
 
 def init_processes(rank, size, fn, backend='gloo'):
@@ -76,8 +113,10 @@ def main():
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)
     parser.add_argument('--root', type=str, default='data')
-    parser.add_argument('--batch-size', type=int, default=128)
-    parser.add_argument('-c', type=float, default=0.01)
+    parser.add_argument('--batch-size', type=int, default=1000)
+    parser.add_argument('--features', type=int, default=47236)
+    parser.add_argument('--shuffle', type=int, default=1)
+    parser.add_argument('--train-file', type=str, default='data')
     args = parser.parse_args()
     print(args)
 

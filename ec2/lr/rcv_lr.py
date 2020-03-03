@@ -1,21 +1,15 @@
 import argparse
-
 import os
 import sys
-import torch
-import torch.distributed as dist
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
+import time
 
-from math import ceil
+import torch.distributed as dist
 from torch.multiprocessing import Process
 
 sys.path.append("../")
 
-from ec2.trainer import Trainer
-from pytorch_model.sparse_lr import LogisticRegression
-from ec2.data_partition import partition_rcv_kmeans
+from pytorch_model.sparse_lr import *
+from ec2.data_partition import partition_sparse
 
 
 def dist_is_initialized():
@@ -25,20 +19,85 @@ def dist_is_initialized():
     return False
 
 
+def broadcast_average(args, weights):
+    all_weights = []
+    avg_w = torch.zeros(weights.shape)
+    if args.rank == 0:
+        torch.distributed.gather(weights, all_weights)
+        tensor_sum = torch.zeros(weights.shape)
+        for c in all_weights:
+            tensor_sum += c
+        avg_w = c/args.world_size
+        dist.broadcast(avg_w, 0)
+    else:
+        dist.send(weights, 0)
+    return avg_w
+
+
 def run(args):
-    """ Distributed Synchronous SGD Example """
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
+    read_start = time.time()
     torch.manual_seed(1234)
+    train_file = open(args.train_file, 'r').readlines()
+    dataset = partition_sparse(train_file, args.features)
+    dataset = [t[0] for t in dataset]
+    print(f"Loading dataset costs {time.time() - read_start}s")
 
-    _, train_loader, bsz, test_loader = partition_rcv_kmeans(args.batch_size, args.root, download=False)
-    num_batches = ceil(len(train_loader.dataset) / float(bsz))
+    preprocess_start = time.time()
+    dataset_size = len(dataset)
+    indices = list(range(dataset_size))
+    split = int(np.floor(0.2 * dataset_size))
+    if args.shuffle:
+        np.random.seed(42)
+        np.random.shuffle(indices)
+    train_indices, val_indices = indices[split:], indices[:split]
 
-    model = LogisticRegression()
-    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
+    train_set = [dataset[i] for i in train_indices]
+    val_set = [dataset[i] for i in val_indices]
+    print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
-    trainer = Trainer(model, optimizer, train_loader, test_loader, args, device)
+    lr = LogisticRegression(train_set, val_set, args.features, args.epochs, args.lr, args.batch_size)
+    training_start = time.time()
+    for epoch in range(args.num_epochs):
+        epoch_start = time.time()
+        num_batches = math.floor(len(train_set) / args.batch_size)
+        for batch_idx in range(num_batches):
+            batch_start = time.time()
+            batch_ins, batch_label = lr.next_batch(batch_idx)
+            batch_grad = torch.zeros(lr.n_input, 1, requires_grad=False)
+            batch_bias = np.float(0)
+            train_loss = Loss()
+            train_acc = Accuracy()
+            for i in range(len(batch_ins)):
+                z = lr.forward(batch_ins[i])
+                h = lr.sigmoid(z)
+                loss = lr.loss(h, batch_label[i])
+                # print("z= {}, h= {}, loss = {}".format(z, h, loss))
+                train_loss.update(loss, 1)
+                train_acc.update(h, batch_label[i])
+                g = lr.backward(batch_ins[i], h.item(), batch_label[i])
+                batch_grad.add_(g)
+                batch_bias += np.sum(h.item() - batch_label[i])
+            batch_grad = batch_grad.div(len(batch_ins))
+            batch_bias = batch_bias / len(batch_ins)
+            batch_grad.mul_(-1.0 * args.lr)
+            lr.grad.add_(batch_grad)
+            lr.bias = lr.bias - batch_bias * args.lr
+            end_compute = time.time()
+            print(f"{args.rank}-th worker finishes computing one batch. Takes {time.time() - end_compute}")
 
-    trainer.fit(args.epochs, is_dist=dist_is_initialized())
+            weights = np.append(lr.grad.numpy().flatten(), lr.bias)
+            sync_start = time.time()
+            weights_merged = broadcast_average(weights)
+            lr.grad, lr.bias = weights_merged[:-1].reshape(args.features, 1), weights_merged[-1]
+            print(f"{args.rank}-th worker finishes sychronizing. Takes {time.time() - end_compute}")
+
+        val_loss, val_acc = lr.evaluate()
+        print(f"Validation loss: {val_loss}, validation accuracy: {val_acc}")
+        print(f"Epoch takes {time.time() - epoch_start}s")
+
+    print(f"Finishes training. {args.epochs} takes {time.time() - training_start}s.")
+
 
 
 def init_processes(rank, size, fn, backend='gloo'):
@@ -77,6 +136,8 @@ def main():
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)
     parser.add_argument('--root', type=str, default='data')
     parser.add_argument('--batch-size', type=int, default=128)
+    parser.add_argument('--features', type=int, default=47236)
+    parser.add_argument('--train-file', type=str, default='data')
     args = parser.parse_args()
     print(args)
 

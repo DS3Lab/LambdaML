@@ -55,7 +55,7 @@ class SparseSVM(object):
     """ Based on http://eprints.pascal-network.org/archive/00004062/01/ShalevSiSr07.pdf
     """
 
-    def __init__(self, _train_set, _test_set, _n_input, _epochs, _lr, _batch_size, _regularization_strength):
+    def __init__(self, _train_set, _test_set, _n_input, _epochs, _lr, _batch_size):
         self.train_set = _train_set
         self.test_set = _test_set
         self.num_train = self.train_set.__len__()
@@ -66,7 +66,6 @@ class SparseSVM(object):
         self.lr = _lr
         self.batch_size = _batch_size
         self.cur_index = 0
-        self.regularization_strength = _regularization_strength
 
     def next_batch(self, batch_idx):
         start = batch_idx * self.batch_size
@@ -89,8 +88,8 @@ class SparseSVM(object):
                 self.cur_index = 0
         return ins_list, label_list
 
-    def one_epoch(self, iteration, is_dist=dist_is_initialized()):
-        batch_ins, batch_label = self.next_batch(iteration)
+    def one_epoch(self, batch_idx, iteration, is_dist=dist_is_initialized()):
+        batch_ins, batch_label = self.next_batch(batch_idx)
 
         train_loss = Loss()
         train_acc = Accuracy()
@@ -98,10 +97,10 @@ class SparseSVM(object):
 
         for i in range(len(batch_ins)):
             ascent = batch_label[i] * float(torch.sparse.mm(batch_ins[i], self.weights))
-            if (ascent < 1.0 and batch_label[i] != 0.0):
-                self.weights = (1 - self.lr*eta)* self.weights + eta * batch_label[i] * batch_ins[i].t()
+            if ascent < 1.0 and batch_label[i] != 0.0:
+                self.weights = (1 - self.lr*eta)*self.weights + eta * batch_label[i] * batch_ins[i].t()
             else:
-                self.weights = (1 - self.lr*eta)* self.weights
+                self.weights = (1 - self.lr*eta)*self.weights
             prediction = torch.sparse.mm(batch_ins[i], self.weights)
             loss = batch_label[i] / (1 + np.exp(prediction))
             # print(prediction)
@@ -127,8 +126,8 @@ class SparseSVM(object):
         test_acc = Accuracy()
         for i in range(self.num_test):
             ins, label = self.test_set.__getitem__(i)
-            y = self.predict(ins)
-            loss = self.loss(y, label)
+            y = torch.sparse.mm(ins, self.weights)
+            loss = ins / (1 + np.exp(y))
             test_loss.update(loss, 1)
             test_acc.update(y, label)
         return test_loss, test_acc
