@@ -20,18 +20,8 @@ def dist_is_initialized():
 
 
 def broadcast_average(args, weights):
-    all_weights = []
-    avg_w = torch.zeros(weights.shape)
-    if args.rank == 0:
-        torch.distributed.gather(weights, all_weights)
-        tensor_sum = torch.zeros(weights.shape)
-        for c in all_weights:
-            tensor_sum += c
-        avg_w = c/args.world_size
-        dist.broadcast(avg_w, 0)
-    else:
-        dist.send(weights, 0)
-    return avg_w
+    dist.all_reduce(weights, op=dist.ReduceOp.SUM)
+    return weights.float() * 1/args.world_size
 
 
 def run(args):
@@ -57,22 +47,22 @@ def run(args):
     val_set = [dataset[i] for i in val_indices]
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
-    svm = SparseSVM(train_set, val_set, 127, args.epochs, args.lr, args.batch_size)
+    svm = SparseSVM(train_set, val_set, 127, args.epochs, args.learning_rate, args.batch_size)
     training_start = time.time()
     for epoch in range(args.epochs):
         num_batches = math.floor(len(train_set)/args.batch_size)
         start_compute = time.time()
         for batch_idx in range(num_batches):
             batch_start = time.time()
-            batch_loss, batch_acc = svm.one_epoch(batch_idx, epoch)
+            batch_acc = svm.one_epoch(batch_idx, epoch)
             print(f"{args.rank}-th worker . Takes {time.time() - batch_start}")
-            print(f"Batch loss: {batch_loss}, validation accuracy: {batch_acc}")
+            print(f"Batch accuracy: {batch_acc}")
             batch_end = time.time()
-            svm.weights = broadcast_average(svm.weights.numpy().flatten()).reshape(args.features, 1)
+            svm.weights = broadcast_average(args, svm.weights)
             print(f"{args.rank}-th worker finishes sychronizing. Takes {time.time() - batch_end}")
 
-        val_loss, val_acc = svm.evaluate()
-        print(f"Validation loss: {val_loss}, validation accuracy: {val_acc}")
+        val_acc = svm.evaluate()
+        print(f"validation accuracy: {val_acc}")
         print(f"Epoch takes {time.time() - start_compute}s")
 
     print(f"Finishes training. {args.epochs} takes {time.time() - training_start}s.")
@@ -111,7 +101,7 @@ def main():
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--no-cuda', action='store_true')
-    parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)
+    parser.add_argument('-l', '--learning-rate', type=float, default=1e-3)
     parser.add_argument('--root', type=str, default='data')
     parser.add_argument('--batch-size', type=int, default=1000)
     parser.add_argument('--features', type=int, default=47236)
