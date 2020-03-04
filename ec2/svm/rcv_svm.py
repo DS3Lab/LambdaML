@@ -6,7 +6,7 @@ import time
 import torch.distributed as dist
 from torch.multiprocessing import Process
 
-sys.path.append("../")
+sys.path.append("../../")
 
 from pytorch_model.sparse_svm import *
 from ec2.data_partition import partition_sparse
@@ -31,7 +31,6 @@ def run(args):
 
     train_file = open(args.train_file, 'r').readlines()
     dataset = partition_sparse(train_file, args.features)
-    dataset = [t[0] for t in dataset]
     print(f"Loading dataset costs {time.time() - read_start}s")
 
     preprocess_start = time.time()
@@ -47,7 +46,7 @@ def run(args):
     val_set = [dataset[i] for i in val_indices]
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
-    svm = SparseSVM(train_set, val_set, 127, args.epochs, args.learning_rate, args.batch_size)
+    svm = SparseSVM(train_set, val_set, args.features, args.epochs, args.learning_rate, args.batch_size)
     training_start = time.time()
     for epoch in range(args.epochs):
         num_batches = math.floor(len(train_set)/args.batch_size)
