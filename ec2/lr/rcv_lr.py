@@ -6,7 +6,7 @@ import time
 import torch.distributed as dist
 from torch.multiprocessing import Process
 
-sys.path.append("../")
+sys.path.append("../../")
 
 from pytorch_model.sparse_lr import *
 from ec2.data_partition import partition_sparse
@@ -20,19 +20,8 @@ def dist_is_initialized():
 
 
 def broadcast_average(args, weights):
-    all_weights = []
-    avg_w = torch.zeros(weights.shape)
-    if args.rank == 0:
-        torch.distributed.gather(weights, all_weights)
-        tensor_sum = torch.zeros(weights.shape)
-        for c in all_weights:
-            tensor_sum += c
-        avg_w = c/args.world_size
-        dist.broadcast(avg_w, 0)
-    else:
-        dist.send(weights, 0)
-    return avg_w
-
+    dist.all_reduce(weights, op=dist.ReduceOp.SUM)
+    return weights/args.world_size
 
 def run(args):
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
@@ -40,7 +29,6 @@ def run(args):
     torch.manual_seed(1234)
     train_file = open(args.train_file, 'r').readlines()
     dataset = partition_sparse(train_file, args.features)
-    dataset = [t[0] for t in dataset]
     print(f"Loading dataset costs {time.time() - read_start}s")
 
     preprocess_start = time.time()
@@ -56,9 +44,9 @@ def run(args):
     val_set = [dataset[i] for i in val_indices]
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
-    lr = LogisticRegression(train_set, val_set, args.features, args.epochs, args.lr, args.batch_size)
+    lr = LogisticRegression(train_set, val_set, args.features, args.epochs, args.learning_rate, args.batch_size)
     training_start = time.time()
-    for epoch in range(args.num_epochs):
+    for epoch in range(args.epochs):
         epoch_start = time.time()
         num_batches = math.floor(len(train_set) / args.batch_size)
         for batch_idx in range(num_batches):
@@ -80,16 +68,17 @@ def run(args):
                 batch_bias += np.sum(h.item() - batch_label[i])
             batch_grad = batch_grad.div(len(batch_ins))
             batch_bias = batch_bias / len(batch_ins)
-            batch_grad.mul_(-1.0 * args.lr)
+            batch_grad.mul_(-1.0 * args.learning_rate)
             lr.grad.add_(batch_grad)
-            lr.bias = lr.bias - batch_bias * args.lr
+            lr.bias = lr.bias - batch_bias * args.learning_rate
             end_compute = time.time()
             print(f"{args.rank}-th worker finishes computing one batch. Takes {time.time() - end_compute}")
 
             weights = np.append(lr.grad.numpy().flatten(), lr.bias)
+            
             sync_start = time.time()
-            weights_merged = broadcast_average(weights)
-            lr.grad, lr.bias = weights_merged[:-1].reshape(args.features, 1), weights_merged[-1]
+            weights_merged = broadcast_average(args, torch.tensor(weights))
+            lr.grad, lr.bias = weights_merged[:-1].reshape(args.features, 1), float(weights_merged[-1])
             print(f"{args.rank}-th worker finishes sychronizing. Takes {time.time() - end_compute}")
 
         val_loss, val_acc = lr.evaluate()
@@ -133,11 +122,12 @@ def main():
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--no-cuda', action='store_true')
-    parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)
+    parser.add_argument('-l', '--learning-rate', type=float, default=1e-3)
     parser.add_argument('--root', type=str, default='data')
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--features', type=int, default=47236)
     parser.add_argument('--train-file', type=str, default='data')
+    parser.add_argument('--shuffle', type=int, default=1)
     args = parser.parse_args()
     print(args)
 
