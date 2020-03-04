@@ -51,6 +51,7 @@ class Accuracy(object):
         self.count += 1
 
 
+
 class SparseSVM(object):
     """ Based on http://eprints.pascal-network.org/archive/00004062/01/ShalevSiSr07.pdf
     """
@@ -67,11 +68,22 @@ class SparseSVM(object):
         self.batch_size = _batch_size
         self.cur_index = 0
 
+    def compute_cost(self, W, X, Y):
+        # calculate hinge loss
+        N = X.shape[0]
+        distances = 1 - Y * (torch.sparse.mm(X, W))
+        distances[distances < 0] = 0  # equivalent to max(0, distance)
+        hinge_loss = 10000 * (np.sum(distances) / N)
+
+        # calculate cost
+        cost = 1 / 2 * np.dot(W, W) + hinge_loss
+        return cost
+
     def next_batch(self, batch_idx):
         start = batch_idx * self.batch_size
         end = min((batch_idx + 1) * self.batch_size, self.num_train)
         ins = [ts[0] for ts in self.train_set[start:end]]
-        label = [ts[1] for ts in self.train_set[start:end]]
+        label = [1 if ts[1] > 0 else -1 for ts in self.train_set[start:end]]
         return ins, label
 
     def get_batch(self):
@@ -91,46 +103,43 @@ class SparseSVM(object):
     def one_epoch(self, batch_idx, iteration, is_dist=dist_is_initialized()):
         batch_ins, batch_label = self.next_batch(batch_idx)
 
-        train_loss = Loss()
         train_acc = Accuracy()
-        eta = 1.0 / (self.lr * (1+iteration))
+        eta = 1.0 / (self.lr * (1 + iteration))
 
         for i in range(len(batch_ins)):
             ascent = batch_label[i] * float(torch.sparse.mm(batch_ins[i], self.weights))
-            if ascent < 1.0 and batch_label[i] != 0.0:
-                self.weights = (1 - self.lr*eta)*self.weights + eta * batch_label[i] * batch_ins[i].t()
+            if (ascent < 1.0 and batch_label[i] != 0.0):
+                self.weights = (1 - self.lr * eta) * self.weights + eta * batch_label[i] * batch_ins[i].t()
             else:
-                self.weights = (1 - self.lr*eta)*self.weights
+                self.weights = (1 - self.lr * eta) * self.weights
             prediction = torch.sparse.mm(batch_ins[i], self.weights)
-            loss = batch_label[i] / (1 + np.exp(prediction))
-            # print(prediction)
-            train_loss.update(loss, 1)
+            # print(loss)
             train_acc.update(prediction, batch_label[i])
-        # print(f"train loss:{train_loss}, train_acc:{train_acc}")
-        return train_loss, train_acc
+        # print(f"train_acc:{train_acc}")
+        return train_acc
 
     def train(self):
         num_batches = math.floor(self.num_train / self.batch_size)
         for epoch in range(self.num_epochs):
             epoch_loss = 0
             for batch_idx in range(num_batches):
-                epoch_loss, epoch_acc = self.one_epoch(epoch)
-            test_loss, test_acc = self.evaluate()
-            print("epoch[{}]: train loss = {}, train accuracy = {}, "
-                  "test loss = {}, test accuracy = {}".format(epoch, epoch_loss, epoch_acc, test_loss, test_acc))
+                epoch_acc = self.one_epoch(batch_idx, epoch)
+            test_acc = self.evaluate()
+            print("epoch[{}]: train accuracy = {}, "
+                  "test accuracy = {}".format(epoch, epoch_acc, test_acc))
             self.cur_index = 0
-            print(self.weights.numpy().flatten())
 
     def evaluate(self):
-        test_loss = Loss()
+        # test_loss = Loss()
         test_acc = Accuracy()
         for i in range(self.num_test):
             ins, label = self.test_set.__getitem__(i)
+            label = 1 if label > 0 else -1
             y = torch.sparse.mm(ins, self.weights)
-            loss = ins / (1 + np.exp(y))
-            test_loss.update(loss, 1)
+            # loss = self.loss(y, label)
+            # test_loss.update(loss, 1)
             test_acc.update(y, label)
-        return test_loss, test_acc
+        return test_acc
 
 if __name__ == "__main__":
     train_file = "../dataset/agaricus_127d_train.libsvm"

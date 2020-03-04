@@ -114,6 +114,7 @@ def handler(event, context):
         epoch_global = roundID * num_epoch_fn + epoch
         
         train_loss, train_acc = train(epoch_global, net, trainloader, optimizer, device, worker_index, num_worker, sync_mode, sync_step)
+        
         test_loss, test_acc = test(epoch_global, net, testloader, device)
         
         print(

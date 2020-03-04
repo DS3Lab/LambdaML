@@ -33,6 +33,28 @@ def merge_np_bytes(bucket_name, num_workers, dtype, shape):
 
     return sum_arr
 
+def merge_weights(bucket_name, num_workers, dtype, w_shape):
+    num_w_files = 0
+    w_grad_sum = np.zeros(w_shape, dtype=dtype)
+
+    while num_w_files < num_workers:
+        objects = list_bucket_objects(bucket_name)
+        if objects is not None:
+            for obj in objects:
+                file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                data = get_object(bucket_name, file_key).read()
+                bytes_data = np.frombuffer(data, dtype=dtype)
+                w_grad = bytes_data.reshape(w_shape)
+                print("merge the {}-th weight grad {} in bucket {} = {}".format(num_w_files, file_key, bucket_name, w_grad))
+                w_grad_sum = w_grad_sum + w_grad
+                num_w_files = num_w_files + 1
+                delete_object(bucket_name, file_key)
+        # else:
+        #     # Didn't get any keys
+        #     print('No objects in {}'.format(bucket_name))
+
+    return w_grad_sum / float(num_workers)
+
 
 def merge_w_b_grads(bucket_name, num_workers,
                     dtype, w_shape, b_shape,
@@ -51,7 +73,7 @@ def merge_w_b_grads(bucket_name, num_workers,
                 bytes_data = np.frombuffer(data, dtype=dtype)
                 if file_key.startswith(w_grad_prefix):
                     w_grad = bytes_data.reshape(w_shape)
-                    print("merge the {}-th weight grad {} in bucket {} = {}".format(num_w_files, file_key, bucket_name, w_grad[0][:5]))
+                    print("merge the {}-th weight grad {} in bucket {} = {}".format(num_w_files, file_key, bucket_name, w_grad))
                     w_grad_sum = w_grad_sum + w_grad
                     num_w_files = num_w_files + 1
                 elif file_key.startswith(b_grad_prefix):
@@ -140,7 +162,7 @@ def get_merged_w_b_grad(bucket_name, file_postfix,
     return w_grad, b_grad
 
 
-def get_merged_w_b(bucket_name, file_postfix, dtype, w_shape, b_shape,
+def get_merged_w_b(bucket_name, file_postfix, dtype, w_shape, b_shape="",
                    w_prefix="w_", b_prefix="b_"):
     print('get merged weight {} in bucket {}'.format(w_prefix + file_postfix, bucket_name))
     w_data = get_object_or_wait(bucket_name, w_prefix + file_postfix, 0.1).read()
