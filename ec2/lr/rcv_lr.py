@@ -21,7 +21,7 @@ def dist_is_initialized():
 
 def broadcast_average(args, weights):
     dist.all_reduce(weights, op=dist.ReduceOp.SUM)
-    return weights/args.world_size
+    return weights.float() * 1/args.world_size
 
 def run(args):
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
