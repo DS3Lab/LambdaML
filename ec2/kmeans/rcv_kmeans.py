@@ -5,11 +5,14 @@ import sys
 import torch
 import torch.distributed as dist
 import numpy as np
+import torch.optim as optim
 
-sys.path.append("../")
+
+sys.path.append("../../")
 
 from ec2.data_partition import partition_sparse
 from pytorch_model.sparse_kmeans import SparseKmeans
+from torch.multiprocessing import Process
 
 
 def broadcast_average(args, centroid_tensor, error_tensor):
@@ -74,9 +77,20 @@ def run(args):
 def init_processes(rank, size, fn, backend='gloo'):
     """ Initialize the distributed environment. """
     os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '24000'
+    os.environ['MASTER_PORT'] = '29500'
     dist.init_process_group(backend, rank=rank, world_size=size)
     fn(rank, size)
+
+
+def run_local(size):
+    processes = []
+    for rank in range(size):
+        p = Process(target=init_processes, args=(rank, size, run))
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
 
 
 def main():
@@ -100,15 +114,16 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    if args.world_size > 1:
-        dist.init_process_group(
-            backend=args.backend,
-            init_method=args.init_method,
-            world_size=args.world_size,
-            rank=args.rank,
-        )
+    # if args.world_size > 1:
+    #     #     dist.init_process_group(
+    #     #         backend=args.backend,
+    #     #         init_method=args.init_method,
+    #     #         world_size=args.world_size,
+    #     #         rank=args.rank,
+    #     #     )
 
-    run(args)
+    # run(args)
+    run_local(args.world_size)
 
 
 if __name__ == '__main__':
