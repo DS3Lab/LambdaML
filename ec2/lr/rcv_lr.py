@@ -97,8 +97,7 @@ def init_processes(rank, size, fn, backend='gloo'):
     fn(rank, size)
 
 
-def run_local():
-    size = 2
+def run_local(size):
     processes = []
     for rank in range(size):
         p = Process(target=init_processes, args=(rank, size, run))
@@ -134,7 +133,8 @@ def main():
     if args.world_size > 1:
         dist.init_process_group(backend=args.backend, init_method=args.init_method, world_size=args.world_size, rank=args.rank)
 
-    run(args)
+    # run(args)
+    run_local(args.world_size)
 
 
 if __name__ == '__main__':
