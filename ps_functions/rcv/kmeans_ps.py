@@ -12,7 +12,6 @@ from thrift.protocol import TBinaryProtocol
 
 from thrift_ps import constants
 
-
 # algorithm setting
 BATCH_SIZE = 10000
 NUM_EPOCHS = 10
@@ -24,19 +23,16 @@ RANDOM_SEED = 42
 def handler(event, context):
     start_time = time.time()
     bucket = event['bucket_name']
-    worker_index = event['rank']
-    num_workers = event['num_workers']
-    key = event['file']
+    key = urllib.parse.unquote_plus(event['key'], encoding='utf-8')
+    key_splits = key.split("_")
+    worker_index = int(key_splits[0])
+    num_worker = int(key_splits[1])
+
     num_epochs = event['num_epochs']
     num_features = event['num_features']
     num_clusters = event['num_clusters']
     threshold = event["threshold"]
     dataset_type = event["dataset_type"]
-
-    print('bucket = {}'.format(bucket))
-    print('number of workers = {}'.format(num_workers))
-    print('worker index = {}'.format(worker_index))
-    print("file = {}".format(key))
 
     # Set thrift connection
     # Make socket
@@ -81,7 +77,7 @@ def handler(event, context):
     # register model
     model_name = "kmeans"
     model_length = centroid_shape[0] * centroid_shape[1] + 1
-    ps_client.register_model(t_client, worker_index, model_name, model_length, num_workers)
+    ps_client.register_model(t_client, worker_index, model_name, model_length, num_worker)
     ps_client.exist_model(t_client, model_name)
     print("register and check model >>> name = {}, length = {}".format(model_name, model_length))
 
@@ -95,15 +91,14 @@ def handler(event, context):
         ps_client.can_pull(t_client, model_name, 0, worker_index)  # sync all workers
     else:
         cent = ps_client.pull_model(t_client, model_name, 0, worker_index)
-        _, centroids = process_centroid(cent, num_clusters, dt, True)
+        centroid_size = len(cent) - 1
+        centroids = np.array(cent[0:-1]).reshape(num_clusters, int(centroid_size / num_clusters))
         if centroid_shape != centroids.shape:
             logger.error("The shape of centroids does not match.")
         logger.info(f"Waiting for initial centroids takes {time.time() - parse_end} s")
 
-    s3 = boto3.client('s3')
     training_start = time.time()
-
-    for epoch in range(1, num_epochs+1):
+    for epoch in range(1, num_epochs + 1):
         epoch_start = time.time()
         logger.info(f"{worker_index}-th worker in {epoch}-th epoch")
 
@@ -113,7 +108,7 @@ def handler(event, context):
         wait_end = time.time()
 
         print(f"Wait for centroid for {last_epoch}-th epoch. Takes {wait_end - epoch_start}")
-        avg_error, centroids = process_centroid(cent_with_error, num_clusters, dt, True)
+        avg_error, centroids = cent_with_error[-1], np.array(cent_with_error[0:-1]).reshape(num_clusters, int(centroid_size/num_clusters))
         res = get_new_centroids(dataset, dataset_type, centroids, epoch, num_features, num_clusters, dt)
         print(f"{worker_index}-th worker: computation takes {time.time() - wait_end}s")
 
@@ -121,8 +116,9 @@ def handler(event, context):
         sync_start = time.time()
         ps_client.can_push(t_client, model_name, epoch, worker_index)
         ps_client.push_grad(t_client, model_name, res, 0, epoch, worker_index)
-        ps_client.can_pull(t_client, model_name, epoch+1, worker_index)  # sync all workers
-        print(f"{worker_index}-th worker finished the {epoch}-th epoch. Synchronization takes: {time.time() - sync_start}s.")
+        ps_client.can_pull(t_client, model_name, epoch + 1, worker_index)  # sync all workers
+        print(
+            f"{worker_index}-th worker finished the {epoch}-th epoch. Synchronization takes: {time.time() - sync_start}s.")
 
     logger.info(f"{worker_index}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
     logger.info(f"Whole process time : {time.time() - training_start}")

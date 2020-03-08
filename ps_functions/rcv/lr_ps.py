@@ -105,7 +105,7 @@ def handler(event, context):
             # pull latest model
             ps_client.can_pull(t_client, model_name, iter_counter, worker_index)
             latest_model = ps_client.pull_model(t_client, model_name, iter_counter, worker_index)
-            lr.grad = torch.from_numpy(latest_model).reshape(num_features, 1)
+            lr.grad = torch.from_numpy(np.asarray(latest_model[:-1])).reshape(num_features, 1)
             lr.bias = float(latest_model[-1])
 
             compute_start = time.time()
