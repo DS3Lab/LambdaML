@@ -114,16 +114,16 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    # if args.world_size > 1:
-    #     #     dist.init_process_group(
-    #     #         backend=args.backend,
-    #     #         init_method=args.init_method,
-    #     #         world_size=args.world_size,
-    #     #         rank=args.rank,
-    #     #     )
+    if args.world_size > 1:
+            dist.init_process_group(
+                backend=args.backend,
+                init_method=args.init_method,
+                world_size=args.world_size,
+                rank=args.rank,
+            )
 
-    # run(args)
-    run_local(args.world_size)
+    run(args)
+    #run_local(args.world_size)
 
 
 if __name__ == '__main__':
