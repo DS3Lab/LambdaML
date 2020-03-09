@@ -18,7 +18,7 @@ from s3.get_object import get_object
 from s3.put_object import put_object
 
 
-from pytorch_model.DenseSVM import DenseSVM,MultiClassHingeLoss
+from pytorch_model.DenseSVM import DenseSVM,MultiClassHingeLoss, BinaryClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
 
@@ -33,9 +33,9 @@ b_grad_prefix = "b_grad_"
 
 # algorithm setting
 
-learning_rate = 0.1
+learning_rate = 0.025
 batch_size = 10000
-num_epochs = 1
+num_epochs = 50
 validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
@@ -53,7 +53,7 @@ def handler(event, context):
     num_classes = event['num_classes']
     print("storage = {}".format(event['storage']))
     print("location = {}".format(event['elasticache']))
-   
+
     endpoint = redis_init(event['elasticache'])
 
     print('bucket = {}'.format(bucket))
@@ -109,7 +109,8 @@ def handler(event, context):
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
-    criterion = MultiClassHingeLoss()
+    #criterion = torch.nn.modules.MultiLabelMarginLoss()
+    criterion = BinaryClassHingeLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
     train_loss = []
@@ -120,6 +121,7 @@ def handler(event, context):
     # Training the Model
     for epoch in range(num_epochs):
         tmp_train = 0
+        batch_start = time.time()
         for batch_index, (items, labels) in enumerate(train_loader):
             print("------worker {} epoch {} batch {}------".format(worker_index, epoch, batch_index))
 
@@ -129,7 +131,12 @@ def handler(event, context):
             # Forward + Backward + Optimize
             optimizer.zero_grad()
             outputs = model(items)
-            loss = criterion(outputs, labels)
+            """
+            padding = (torch.ones(outputs.shape)*(-1)).long()
+            padding[:,labels] = 1
+            loss = criterion(outputs,padding)
+            """
+            loss = criterion(outputs,labels)
             loss.backward()
 
             w_grad = model.linear.weight.grad.data.numpy()
@@ -182,9 +189,12 @@ def handler(event, context):
 
 
             tmp_train=tmp_train+loss.item()
+            print("batch cost = {}".format(time.time()-batch_start))
+            batch_start = time.time()
         train_loss.append(tmp_train/(batch_index+1))
         epoch_time += time.time()-epoch_start
-
+        print(time.time()-epoch_start)
+        print(len(train_loss))
 
         # Test the Model
         correct = 0
@@ -194,10 +204,15 @@ def handler(event, context):
         for items, labels in validation_loader:
             items = Variable(items.view(-1, num_features))
             outputs = model(items)
+            """
+            padding = (torch.ones(outputs.shape)*(-1)).long()
+            padding[:,labels] = 1
+            tmp_loss = criterion(outputs,padding)
+            """
+            tmp_loss = criterion(outputs, labels)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum()
-            tmp_loss = criterion(outputs, labels)
             loss += tmp_loss.item()
             count += 1
         test_loss.append(loss/count)

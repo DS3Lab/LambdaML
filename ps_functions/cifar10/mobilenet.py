@@ -11,7 +11,7 @@ import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
 from torch.utils.data.sampler import SubsetRandomSampler
-
+"""
 
 from thrift_ps.ps_service import ParameterServer
 from thrift_ps.ps_service.ttypes import Model, Update, Grad, InvalidOperation
@@ -22,7 +22,7 @@ from thrift.transport import TTransport
 from thrift.protocol import TBinaryProtocol
 
 from thrift_ps import constants
-
+"""
 
 # algorithm setting
 learning_rate = 0.1
@@ -43,7 +43,7 @@ def handler(argv):
 
     print('number of workers = {}'.format(num_worker))
     print('worker index = {}'.format(worker_index))
-
+    """
 
     # Set thrift connection
     # Make socket
@@ -61,6 +61,7 @@ def handler(argv):
     ps_client.ping(t_client)
     print("create and ping thrift server >>> HOST = {}, PORT = {}"
           .format(constants.HOST, constants.PORT))
+    """
     preprocess_start = time.time()
     batch_size = 200
 
@@ -97,10 +98,13 @@ def handler(argv):
             tmp_shape *=w
         parameter_length.append(tmp_shape)
         model_length += tmp_shape
+    print("model_length = {}".format(model_length))
+    model_length = 830
+    """
     ps_client.register_model(t_client, worker_index, model_name, model_length, num_worker)
     #ps_client.exist_model(t_client, model_name)
     print("register and check model >>> name = {}, length = {}".format(model_name, model_length))
-
+    """
     # Training the Model
     train_start = time.time()
     iter_counter = 0
@@ -112,36 +116,42 @@ def handler(argv):
             batch_start = time.time()
 
             # pull latest model
+            """
             ps_client.can_pull(t_client, model_name, iter_counter, worker_index)
             latest_model = ps_client.pull_model(t_client, model_name, iter_counter, worker_index)
             pos = 0
             for layer_index, param in enumerate(model.parameters()):
-                param.data = Variable(torch.from_numpy(np.asarray(latest_model[pos:pos+parameter_length[layer_index]],dtype=np.double).reshape(parameter_shape[layer_index])))
+                param.data = Variable(torch.from_numpy(np.asarray(latest_model[pos:pos+parameter_length[layer_index]],dtype=np.float32).reshape(parameter_shape[layer_index])))
                 pos += parameter_length[layer_index]
+            """
             # Forward + Backward + Optimize
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
-            outputs = model(inputs.double())
+            outputs = model(inputs)
             loss = criterion(outputs, targets)
             loss.backward()
 
             # flatten and concat gradients of weight and bias
-            param_grad = np.zeros((1))
+            param_grad = np.ones((1))*(-1)
             for param in model.parameters():
-                param_grad = np.np.concatenate((param_grad,param.grad.data.numpy().flatten()))
+                print("shape of layer = {}".format(param.data.numpy().flatten().shape))
+                param_grad = np.concatenate((param_grad,param.data.numpy().flatten()))
 
+            param_grad = np.delete(param_grad,0)
+            print("model_length = {}".format(param_grad.shape))
             cal_time = time.time() - batch_start
-
+            """
             # push gradient to PS
             sync_start = time.time()
             ps_client.can_push(t_client, model_name, iter_counter, worker_index)
             ps_client.push_grad(t_client, model_name, param_grad, LEARNING_RATE, iter_counter, worker_index)
             ps_client.can_pull(t_client, model_name, iter_counter+1, worker_index)      # sync all workers
             sync_time = time.time() - sync_start
-
+            """
+            sync_time = time.time()
             print('Epoch: [%d/%d], Step: [%d/%d] >>> Time: %.4f, Loss: %.4f, epoch cost %.4f, '
                   'batch cost %.4f s: cal cost %.4f s and communication cost %.4f s'
-                  % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size,
+                  % (epoch + 1, num_epochs, batch_index + 1, len(train_loader) / batch_size,
                      time.time() - train_start, loss.data, time.time() - epoch_start,
                      time.time() - batch_start, cal_time, sync_time))
             iter_counter += 1

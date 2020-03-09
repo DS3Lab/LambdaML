@@ -108,7 +108,7 @@ def handler(event, context):
             tmp_shape *=w
         parameter_length.append(tmp_shape)
         model_length += tmp_shape
-    model_length = 1
+
     ps_client.register_model(t_client, worker_index, model_name, model_length, num_worker)
     ps_client.exist_model(t_client, model_name)
     print("register and check model >>> name = {}, length = {}".format(model_name, model_length))
@@ -118,10 +118,21 @@ def handler(event, context):
     iter_counter = 0
     for epoch in range(num_epochs):
         epoch_start = time.time()
+        model.train()
         for batch_index, (inputs, targets) in enumerate(train_loader):
             print("------worker {} epoch {} batch {}------"
                   .format(worker_index, epoch, batch_index))
             batch_start = time.time()
+
+
+            # pull latest model
+            ps_client.can_pull(t_client, model_name, iter_counter, worker_index)
+            latest_model = ps_client.pull_model(t_client, model_name, iter_counter, worker_index)
+            pos = 0
+            for layer_index, param in enumerate(model.parameters()):
+                param.data = Variable(torch.from_numpy(np.asarray(latest_model[pos:pos+parameter_length[layer_index]],dtype=np.float32).reshape(parameter_shape[layer_index])))
+                pos += parameter_length[layer_index]
+
             # Forward + Backward + Optimize
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
@@ -129,27 +140,20 @@ def handler(event, context):
 
             optimizer.zero_grad()
             loss.backward()
-            # flatten and concat gradients of weight and bias
-            weights = np.zeros((1))
-            for parma in model.parameters():
-                weights = np.concatenate((weights,param.grad.data.numpy().flatten()))
 
-            weights = np.delete(weights,0)
-            weigths = np.zeros((1))
+            # flatten and concat gradients of weight and bias
+            param_grad = np.zeros((1))
+            for param in model.parameters():
+                #print("shape of layer = {}".format(param.data.numpy().flatten().shape))
+                param_grad = np.concatenate((param_grad,param.data.numpy().flatten()))
+            param_grad = np.delete(param_grad,0)
+            print("model_length = {}".format(param_grad.shape))
+
             # push gradient to PS
             sync_start = time.time()
             print(ps_client.can_push(t_client, model_name, iter_counter, worker_index))
-            print(ps_client.push_grad(t_client, model_name, weights, LEARNING_RATE, iter_counter, worker_index))
+            print(ps_client.push_grad(t_client, model_name, param_grad, learning_rate, iter_counter, worker_index))
             print(ps_client.can_pull(t_client, model_name, iter_counter+1, worker_index))      # sync all workers
-
-            # pull latest model
-            ps_client.can_pull(t_client, model_name, iter_counter, worker_index)
-            latest_model = ps_client.pull_model(t_client, model_name, iter_counter, worker_index)
-            pos = 0
-            for layer_index, param in enumerate(model.parameters()):
-                param.grad.data = Variable(torch.from_numpy(np.asarray(latest_model[pos:pos+parameter_length[layer_index]]).reshape(parameter_shape[layer_index])))
-                pos += parameter_length[layer_index]
-
             sync_time = time.time() - sync_start
 
 

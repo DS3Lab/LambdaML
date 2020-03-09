@@ -15,7 +15,7 @@ from s3.get_object import get_object
 from s3.put_object import put_object
 from sync.sync_grad_redis import *
 
-from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss
+from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss, BinaryClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
 # lambda setting
@@ -28,9 +28,9 @@ b_prefix = "b_"
 
 # algorithm setting
 
-learning_rate = 0.1
+learning_rate = 0.02
 batch_size = 100000
-num_epochs = 55
+num_epochs = 50
 validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
@@ -47,8 +47,6 @@ def handler(event, context):
     num_classes = event['num_classes']
     elasti_location = event['elasticache']
     endpoint = redis_init(elasti_location)
-    model_bucket = event['model_bucket']
-    grad_bucket = event['grad_bucket']
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
 
@@ -59,7 +57,7 @@ def handler(event, context):
 
     batch_size = 100000
     batch_size = int(np.ceil(batch_size/num_worker))
-    
+
     torch.manual_seed(random_seed)
 
     sync_meta = SyncMeta(worker_index, num_worker)
@@ -102,7 +100,7 @@ def handler(event, context):
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
-    criterion = MultiClassHingeLoss()
+    criterion = BinaryClassHingeLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
     train_loss = []
@@ -135,7 +133,7 @@ def handler(event, context):
         #sync model
         w_model = model.linear.weight.data.numpy()
         b_model = model.linear.bias.data.numpy()
-        
+
         #synchronization starts from that every worker writes their model after this epoch
         sync_start = time.time()
         hset_object(endpoint, grad_bucket, w_prefix + str(worker_index), w_model.tobytes())
@@ -171,28 +169,29 @@ def handler(event, context):
         tmp_sync_time = time.time() - sync_start
         print("synchronization cost {} s".format(tmp_sync_time))
         epoch_time = time.time()-epoch_start + epoch_time
-
+        print("epoch time = {}".format(time.time()-epoch_start))
+        # Test the Model
         # Test the Model
         correct = 0
         total = 0
+        loss = 0
         count = 0
-        tmp_test = 0
         for items, labels in validation_loader:
             items = Variable(items.view(-1, num_features))
             outputs = model(items)
-            loss = criterion(outputs, labels)
+            tmp_loss = criterion(outputs, labels)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum()
-            tmp_test = tmp_test + loss.item()
-            count = count+1
-        #print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
+            loss += tmp_loss.item()
+            count += 1
+        test_loss.append(loss/count)
         test_acc.append(100 * correct / total)
-        test_loss.append(tmp_test/count)
+        #print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
         epoch_start = time.time()
     endTs = time.time()
     print("elapsed time = {} s".format(endTs - startTs))
     loss_record = [test_loss,test_acc,train_loss,epoch_time]
-    put_object("model-average-loss","average_loss{}".format(worker_index),pickle.dumps(loss_record))
-    
+    put_object("svm-model-average","average_loss{}".format(worker_index),pickle.dumps(loss_record))
+
         
