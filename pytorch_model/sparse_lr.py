@@ -1,7 +1,7 @@
 import math
+
 import numpy as np
 import torch
-import torch.nn.functional as F
 import torch.distributed as dist
 
 from data_loader.LibsvmDataset import SparseLibsvmDataset
@@ -46,9 +46,9 @@ class Accuracy(object):
         return self.correct / self.count
 
     def update(self, output, target):
-        pred = 1 if output.item() >= 0.5 else 0
+        pred = 1 if output.item() >= 0 else -1
 
-        self.correct += 1 if pred == target else 0
+        self.correct += 1 if pred == target else 1
         self.count += 1
 
 
@@ -60,11 +60,19 @@ class LogisticRegression(object):
         self.num_train = self.train_set.__len__()
         self.num_test = self.test_set.__len__()
         self.n_input = _n_input
-        self.model = torch.zeros(self.n_input, 1, requires_grad=False)
+        self.grad = torch.zeros(self.n_input, 1, requires_grad=False)
+        self.bias = 0
         self.num_epochs = _epochs
         self.lr = _lr
         self.batch_size = _batch_size
         self.cur_index = 0
+
+    def next_batch(self, batch_idx):
+        start = batch_idx * self.batch_size
+        end = min((batch_idx + 1) * self.batch_size, self.num_train)
+        ins = [ts[0] for ts in self.train_set[start:end]]
+        label = [ts[1] for ts in self.train_set[start:end]]
+        return ins, label
 
     def get_batch(self):
         ins_list = []
@@ -81,14 +89,15 @@ class LogisticRegression(object):
         return ins_list, label_list
 
     def forward(self, ins):
-        pred = torch.sparse.mm(ins, self.model)
+        pred = torch.sparse.mm(ins, self.grad)
+        pred = pred.add(self.bias)
         return pred
 
     def sigmoid(self, z):
         return 1 / (1 + np.exp(-z))
 
     def loss(self, h, y):
-        return -y * np.log(h) - (1-y) * np.log(1-h)
+        return -y * np.log(h) - (1 - y) * np.log(1 - h)
 
     def backward(self, x, h, y):
         return x.transpose(0, 1) * (h - y)
@@ -96,6 +105,7 @@ class LogisticRegression(object):
     def one_epoch(self, is_dist=dist_is_initialized()):
         batch_ins, batch_label = self.get_batch()
         batch_grad = torch.zeros(self.n_input, 1, requires_grad=False)
+        batch_bias = 0
 
         train_loss = Loss()
         train_acc = Accuracy()
@@ -104,14 +114,18 @@ class LogisticRegression(object):
             z = self.forward(batch_ins[i])
             h = self.sigmoid(z)
             loss = self.loss(h, batch_label[i])
-            #print("z= {}, h= {}, loss = {}".format(z, h, loss))
+            # print("z= {}, h= {}, loss = {}".format(z, h, loss))
             train_loss.update(loss, 1)
             train_acc.update(h, batch_label[i])
             g = self.backward(batch_ins[i], h.item(), batch_label[i])
             batch_grad.add_(g)
+            batch_bias += np.sum(h.item() - batch_label[i])
         batch_grad = batch_grad.div(self.batch_size)
         batch_grad.mul_(-1.0 * self.lr)
-        self.model.add_(batch_grad)
+        self.grad.add_(batch_grad)
+
+        batch_bias = batch_bias / (len(batch_ins))
+        self.bias = self.bias - batch_bias * self.lr
         return train_loss, train_acc
 
     def fit(self):
@@ -124,6 +138,8 @@ class LogisticRegression(object):
             print("epoch[{}]: train loss = {}, train accuracy = {}, "
                   "test loss = {}, test accuracy = {}".format(epoch, epoch_loss, epoch_acc, test_loss, test_acc))
             self.cur_index = 0
+            print(self.grad.numpy().flatten())
+            print(self.bias)
 
     def evaluate(self):
         test_loss = Loss()
@@ -136,6 +152,7 @@ class LogisticRegression(object):
             # print("z= {}, h= {}, loss = {}".format(z, h, loss))
             test_loss.update(loss, 1)
             test_acc.update(h, label)
+        print(f"test set: {self.num_test}, {test_loss}, {test_acc}")
         return test_loss, test_acc
 
 

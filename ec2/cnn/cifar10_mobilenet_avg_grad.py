@@ -1,17 +1,15 @@
 import argparse
 
-import os
 import sys
 import torch
 import torch.distributed as dist
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 
 from math import ceil
 from torch.multiprocessing import Process
 
 sys.path.append("../")
+sys.path.append("../../")
 
 from ec2.trainer import Trainer
 from ec2.data_partition import partition_cifar10
@@ -51,7 +49,7 @@ def run(args):
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
     torch.manual_seed(1234)
 
-    train_loader, bsz, test_loader = partition_cifar10(args.batch_size, args.root, download=False)
+    train_loader, bsz, test_loader = partition_cifar10(args.batch_size, args.root, download=True)
     num_batches = ceil(len(train_loader.dataset) / float(bsz))
 
     model = MobileNet()
@@ -94,8 +92,6 @@ def main():
         help='URL specifying how to initialize the package.')
     parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
-
-
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)

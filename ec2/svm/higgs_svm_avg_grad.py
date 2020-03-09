@@ -10,13 +10,15 @@ from math import ceil
 from torch.multiprocessing import Process
 
 sys.path.append("../")
+sys.path.append("../../")
 
-from ec2.trainer import Trainer
+from ec2.svm.svm_trainer import Trainer
 from ec2.data_partition import partition_higgs
-from pytorch_model.higgs import LogisticRegression
+from pytorch_model.higgs import SVM
 
 
 validation_ratio = .2
+
 
 def dist_is_initialized():
     if dist.is_available():
@@ -35,10 +37,10 @@ def run(args):
     train_loader, bsz, test_loader = partition_higgs(args.batch_size, file_name, validation_ratio)
     num_batches = ceil(len(train_loader.dataset) / float(bsz))
 
-    model = LogisticRegression()
+    model = SVM()
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate)
 
-    trainer = Trainer(model, optimizer, train_loader, test_loader, args, device)
+    trainer = Trainer(model, optimizer, train_loader, test_loader, device)
 
     trainer.fit(args.epochs, is_dist=dist_is_initialized())
 

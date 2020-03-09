@@ -1,0 +1,32 @@
+import boto3
+import json
+
+from sync.sync_grad import clear_bucket
+
+
+def handler(event, context):
+    dataset_name = 'higgs'
+    bucket_name = "higgs-10"
+    num_workers = 10
+    tmp_bucket = "tmp-params"
+    merged_bucket = "merged-params"
+
+    clear_bucket(tmp_bucket)
+    clear_bucket(merged_bucket)
+
+    # invoke functions
+    payload = dict()
+    payload['dataset'] = dataset_name
+    payload['bucket_name'] = bucket_name
+    payload['num_workers'] = num_workers
+    payload['tmp_bucket'] = tmp_bucket
+    payload['merged_bucket'] = merged_bucket
+    payload['lambda'] = 0.01
+    payload['rho'] = 0.01
+
+    # invoke functions
+    lambda_client = boto3.client('lambda')
+    for i in range(num_workers):
+        payload['rank'] = i
+        payload['file'] = '{}_{}'.format(i, num_workers)
+        lambda_client.invoke(FunctionName='LR_higgs', InvocationType='Event', Payload=json.dumps(payload))
