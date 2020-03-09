@@ -20,6 +20,7 @@ class DenseSVM(torch.nn.Module):
 
 
 class MultiClassHingeLoss(torch.nn.Module):
+
     def forward(self,pred,target):
         loss_value = 0
         for i in range(pred.shape[0]):
@@ -29,3 +30,16 @@ class MultiClassHingeLoss(torch.nn.Module):
             tmp_hinge = torch.cat((torch.zeros((1)),tmp_loss))
             loss_value += torch.max(tmp_hinge,0)[0]
         return loss_value/target.shape[0]
+
+class BinaryClassHingeLoss(torch.nn.Module):
+    """
+    def forward(self,pred,target):
+        target[target == 0] = -1
+        target = torch.cat((target,target),0).float().reshape(target.shape[0],2)
+        loss_value = 1 - target*pred
+        hinge = torch.cat((torch.zeros((pred.shape[0],1)),loss_value),1)
+        return torch.mean(torch.max(hinge,1)[0])
+    """
+    def forward(self,input,target):
+        target = torch.cat((target,target)).reshape(target.shape[0],2).float()
+        return torch.mean(torch.clamp(1 - target * input, min=0))

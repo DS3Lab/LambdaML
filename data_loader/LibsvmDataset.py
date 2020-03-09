@@ -74,9 +74,11 @@ class DenseLibsvmDataset(Dataset):
         label = int(splits[0])
         #values = np.zeros(self.max_dim, dtype=np.float32)
         values = [0] * self.max_dim
+               
         for item in splits[1:]:
             tup = item.split(":")
-            values[int(tup[0])-1] = float(tup[1])
+           
+            values[int(tup[0])] = float(tup[1])
         vector = torch.tensor(values, dtype=torch.float32)
         return vector, label
 

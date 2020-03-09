@@ -15,7 +15,7 @@ from s3.get_object import get_object
 from s3.put_object import put_object
 from sync.sync_grad_redis import *
 
-from model.LogisticRegression import LogisticRegression
+from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
 
@@ -32,7 +32,7 @@ b_grad_prefix = "b_grad_"
 
 # algorithm setting
 
-learning_rate = 0.1#np.arange(0.09,0.15,0.01)
+learning_rate = 0.1
 batch_size = 100000
 num_epochs = 55
 validation_ratio = .2
@@ -53,7 +53,8 @@ def handler(event, context):
     endpoint = redis_init(elasti_location)
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
-  
+    model_bucket = event['model_bucket']
+    grad_bucket = event['grad_bucket']
     key_splits = key.split("_")
     worker_index = int(key_splits[0])
     #num_worker = int(key_splits[1])
@@ -98,13 +99,13 @@ def handler(event, context):
     
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
     
-    model = LogisticRegression(num_features, num_classes)
+    model = DenseSVM(num_features, num_classes)
     
 
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = MultiClassHingeLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
     
     train_loss = []
@@ -135,7 +136,7 @@ def handler(event, context):
             hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
             hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
             
-            time.sleep(0.005)#
+            time.sleep(0.0001)#
             #randomly get one gradient from others. (Asynchronized)
             w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
             b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)	
@@ -149,7 +150,7 @@ def handler(event, context):
                       % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
             tmp_train += loss.item()
         total_time += time.time()-epoch_start
-        train_loss.append(tmp_train/(batch_index+1))
+        train_loss.append(tmp_train)
         
         tmp_test,tmp_acc = test(model,validation_loader,criterion)
         test_loss.append(tmp_test)
