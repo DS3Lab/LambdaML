@@ -9,11 +9,13 @@ from torch.nn import Parameter
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from sync.sync_grad import *
+from sync.sync_reduce_scatter import reduce_scatter_batch_multi_bucket, delete_expired_merged
 
-from model.LogisticRegression import LogisticRegression
+from pytorch_model.DenseSVM import DenseSVM, BinaryClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 
 from thrift_ps.ps_service import ParameterServer
+from thrift_ps.ps_service.ttypes import Model, Update, Grad, InvalidOperation
 from thrift_ps.client import ps_client
 
 from thrift.transport import TSocket
@@ -88,16 +90,16 @@ def handler(event, context):
     validation_loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, sampler=valid_sampler)
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
-    model = LogisticRegression(NUM_FEATURES, NUM_CLASSES)
+    model = DenseSVM(NUM_FEATURES, NUM_CLASSES)
 
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = BinaryClassHingeLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
 
     # register model
-    model_name = "w.b"
+    model_name = "SVM"
     weight_shape = model.linear.weight.data.numpy().shape
     weight_length = weight_shape[0] * weight_shape[1]
     bias_shape = model.linear.bias.data.numpy().shape
@@ -129,7 +131,7 @@ def handler(event, context):
             # Forward + Backward + Optimize
             optimizer.zero_grad()
             outputs = model(items.double())
-            loss = criterion(outputs, labels)
+            loss = criterion(outputs, labels.double())
             loss.backward()
 
             # flatten and concat gradients of weight and bias

@@ -91,8 +91,8 @@ class Trainer(object):
             target = target.to(self.device)
 
             output = self.model(data)
-            loss = torch.mean(torch.clamp(1 - output * target, min=0))  # hinge loss
-            loss += 0.01 * (self.model.linear.weight.t() @ self.model.linear.weight) / 2.0  # l2 penalty
+            loss = torch.mean(torch.clamp(1 - output.t() * target, min=0))  # hinge loss
+            loss += 0.01 * torch.mean(self.model.linear.weight ** 2) / 2.0  # l2 penalty
 
             self.optimizer.zero_grad()
             loss.backward()
