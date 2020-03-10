@@ -72,11 +72,10 @@ def run(args):
             lr.grad.add_(batch_grad)
             lr.bias = lr.bias - batch_bias * args.learning_rate
             end_compute = time.time()
-            print(f"{args.rank}-th worker finishes computing one batch. Takes {time.time() - end_compute}")
+            print(f"Train loss: {train_loss}, train accurary: {train_acc}")
+            print(f"{args.rank}-th worker finishes computing one batch. Takes {time.time() - batch_start}")
 
             weights = np.append(lr.grad.numpy().flatten(), lr.bias)
-            
-            sync_start = time.time()
             weights_merged = broadcast_average(args, torch.tensor(weights))
             lr.grad, lr.bias = weights_merged[:-1].reshape(args.features, 1), float(weights_merged[-1])
             print(f"{args.rank}-th worker finishes sychronizing. Takes {time.time() - end_compute}")
@@ -92,7 +91,7 @@ def run(args):
 def init_processes(rank, size, fn, backend='gloo'):
     """ Initialize the distributed environment. """
     os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '29500'
+    os.environ['MASTER_PORT'] = '23456'
     dist.init_process_group(backend, rank=rank, world_size=size)
     fn(rank, size)
 
@@ -130,8 +129,8 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    if args.world_size > 1:
-        dist.init_process_group(backend=args.backend, init_method=args.init_method, world_size=args.world_size, rank=args.rank)
+    # if args.world_size > 1:
+    dist.init_process_group(backend=args.backend, init_method=args.init_method, world_size=args.world_size, rank=args.rank)
 
     run(args)
     # run_local(args.world_size)

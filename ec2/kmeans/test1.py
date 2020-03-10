@@ -57,27 +57,27 @@ def run(args):
     dist.broadcast(centroids, 0)
     print(f"Receiving initial centroids costs {time.time() - init_cent_start}s")
 
-    training_start = time.time()
-    for epoch in range(args.epochs):
-        if avg_error >= args.threshold:
-            start_compute = time.time()
-            model = SparseKmeans(train_set, centroids, args.features, args.num_clusters)
-            model.find_nearest_cluster()
-            error = torch.tensor(model.error)
-            end_compute = time.time()
-            print(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
-            centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), error)
-            print(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s")
-        else:
-            print(f"{args.rank}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
-            print(f"Whole process time : {time.time() - training_start}")
-            return
-
+#    training_start = time.time()
+#    for epoch in range(args.epochs):
+#        if avg_error >= args.threshold:
+#            start_compute = time.time()
+#            model = SparseKmeans(train_set, centroids, args.features, args.num_clusters)
+#            model.find_nearest_cluster()
+#            error = torch.tensor(model.error)
+#            end_compute = time.time()
+#            print(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
+#            centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), error)
+#            print(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s")
+#        else:
+#            print(f"{args.rank}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
+#            print(f"Whole process time : {time.time() - training_start}")
+#            return
+#
 
 def init_processes(rank, size, fn, backend='gloo'):
     """ Initialize the distributed environment. """
     os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '19150'
+    os.environ['MASTER_PORT'] = '29500'
     dist.init_process_group(backend, rank=rank, world_size=size)
     fn(rank, size)
 
@@ -100,7 +100,7 @@ def main():
         '-i',
         '--init-method',
         type=str,
-        default='tcp://127.0.0.1:19150',
+        default='tcp://127.0.0.1:22222',
         help='URL specifying how to initialize the package.')
     parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
