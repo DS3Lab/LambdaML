@@ -1,6 +1,6 @@
 import time
 import os
-import urllib.parse
+# import urllib.parse
 import logging
 import numpy as np
 import boto3
@@ -15,13 +15,13 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from sync.sync_meta import SyncMeta
+# from sync.sync_meta import SyncMeta
 
 from pytorch_model.cifar10 import MobileNet
-from training_test import train, test
+# from training_test import train, test
 
-from sync.sync_grad import *
-from sync.sync_reduce_scatter import reduce_scatter_batch_multi_bucket, delete_expired_merged
+# from sync.sync_grad import *
+# from sync.sync_reduce_scatter import reduce_scatter_batch_multi_bucket, delete_expired_merged
 
 # from model.LogisticRegression import LogisticRegression
 # from data_loader.LibsvmDataset import DenseLibsvmDataset2
@@ -50,16 +50,14 @@ NUM_EPOCHS = 10
 # dataset setting
 training_file = 'training.pt'
 test_file = 'test.pt'
-
 checkpoint_file = 'checkpoint.pt'
-
 local_dir = "/tmp"
 
 # sync up mode
 # sync_mode = 'cen'
 # sync_mode = 'grad_avg'
-sync_mode = 'model_avg'
-sync_step = 39
+# sync_mode = 'model_avg'
+# sync_step = 39
 
 # learning algorithm setting
 learning_rate = 0.1
@@ -108,18 +106,12 @@ class Average(object):
 
 def handler(event, context):
     start_time = time.time()
-    bucket = event['bucket_name']
+    bucket = event['data_bucket']
     worker_index = event['rank']
     num_workers = event['num_workers']
-    # key = event['file']
     key = 'training_{}.pt'.format(worker_index)
 
-    print('data_bucket = {}\n worker_index:{}\n num_worker:{}\n key:{}'.format(bucket, worker_index, num_worker, key))
-
-    # print('bucket = {}'.format(bucket))
-    # print('number of workers = {}'.format(num_workers))
-    # print('worker index = {}'.format(worker_index))
-    # print("file = {}".format(key))
+    print('data_bucket = {}\n worker_index:{}\n num_worker:{}\n key:{}'.format(bucket, worker_index, num_workers, key))
 
     # Set thrift connection
     # Make socket
@@ -147,18 +139,6 @@ def handler(event, context):
 
     # preprocess dataset
     preprocess_start = time.time()
-    # dataset_size = len(dataset)
-    # indices = list(range(dataset_size))     # indices for training and validation splits:
-    # split = int(np.floor(VALIDATION_RATIO * dataset_size))
-    # if SHUFFLE_DATASET:
-    #     np.random.seed(RANDOM_SEED)
-    #     np.random.shuffle(indices)
-    # train_indices, val_indices = indices[split:], indices[:split]
-    # # Creating PT data samplers and loaders:
-    # train_sampler = SubsetRandomSampler(train_indices)
-    # valid_sampler = SubsetRandomSampler(val_indices)
-    # train_loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, sampler=train_sampler)
-    # validation_loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, sampler=valid_sampler)
 
     trainset = torch.load(os.path.join(local_dir, training_file))
     testset = torch.load(os.path.join(local_dir, test_file))
@@ -209,15 +189,6 @@ def handler(event, context):
     ps_client.exist_model(t_client, model_name)
 
     print("register and check model >>> name = {}, length = {}".format(model_name, weight_length))
-    # model_name = "w.b"
-    # weight_shape = model.linear.weight.data.numpy().shape
-    # weight_length = weight_shape[0] * weight_shape[1]
-    # bias_shape = model.linear.bias.data.numpy().shape
-    # bias_length = bias_shape[0]
-    # model_length = weight_length + bias_length
-    # ps_client.register_model(t_client, worker_index, model_name, model_length, num_workers)
-    # ps_client.exist_model(t_client, model_name)
-    # print("register and check model >>> name = {}, length = {}".format(model_name, model_length))
 
     # Training the Model
     train_start = time.time()
@@ -236,24 +207,23 @@ def handler(event, context):
 
             # print("------worker {} epoch {} batch {}------".format(worker_index, epoch+1, batch_idx+1))
             batch_start = time.time()
-
+            
             # pull latest model
+            pull_start = time.time()
             ps_client.can_pull(t_client, model_name, iter_counter, worker_index)
             latest_model = ps_client.pull_model(t_client, model_name, iter_counter, worker_index)
-            latest_model = np.asarray(latest_model)
+            latest_model = np.asarray(latest_model,dtype=np.float32)
+            pull_time = time.time() - pull_start
 
+            # update the model
             offset = 0
             for layer_index, param in enumerate(net.parameters()):
 
                 layer_value = latest_model[offset : offset + weight_size[layer_index]].reshape(weight_shape[layer_index])
-
                 param.data = torch.from_numpy(layer_value)
 
                 offset += weight_size[layer_index]
-
-            # items = Variable(items.view(-1, NUM_FEATURES))
-            # labels = Variable(labels)
-
+    
             # Forward + Backward + Optimize
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
@@ -261,33 +231,33 @@ def handler(event, context):
             
             optimizer.zero_grad()
             loss.backward()
-
+            
+            train_acc.update(outputs, targets)
+            train_loss.update(loss.item(), inputs.size(0))
+            
             # flatten and concat gradients of weight and bias
             for index, param in enumerate(net.parameters()):
                 if index == 0:
                     flattened_grad = param.grad.data.numpy().flatten()
                 else:
                     flattened_grad = np.concatenate((flattened_grad, param.grad.data.numpy().flatten()))
-            # w_b_grad = np.concatenate((model.linear.weight.grad.data.numpy().flatten(),
-            #                            model.linear.bias.grad.data.numpy().flatten()))
-
-            cal_time = time.time() - batch_start
-
+    
+            flattened_grad = flattened_grad * -1
+            
             # push gradient to PS
-            sync_start = time.time()
+            push_start = time.time()
             ps_client.can_push(t_client, model_name, iter_counter, worker_index)
             ps_client.push_grad(t_client, model_name, flattened_grad, learning_rate, iter_counter, worker_index)
             ps_client.can_pull(t_client, model_name, iter_counter+1, worker_index)      # sync all workers
-            sync_time = time.time() - sync_start
-
-            print('Epoch: [%d/%d], Step: [%d] >>> Time: %.4f, Loss: %.4f, epoch cost %.4f, '
-                  'batch cost %.4f s: cal cost %.4f s and communication cost %.4f s'
-                  % (epoch, NUM_EPOCHS, num_batch,
-                     time.time() - train_start, loss.data, time.time() - epoch_start,
-                     time.time() - batch_start, cal_time, sync_time))
+            push_time = time.time() - push_start
 
             iter_counter += 1
             num_batch += 1
+            
+            step_time = time.time() - batch_start
+            
+            print("Epoch:[{}/{}], Step:[{}/{}];\n Training Loss:{}, Training accuracy:{};\n Step Time:{}, Calculation Time:{}, Communication Time:{}".format(
+                epoch, NUM_EPOCHS, num_batch, len(trainloader), train_loss, train_acc, step_time, step_time - (pull_time + push_time), pull_time + push_time))
 
         # Test the Model
         net.eval()

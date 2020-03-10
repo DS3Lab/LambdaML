@@ -66,6 +66,7 @@ def reduce_epoch(vector, tmp_bucket, merged_bucket, num_workers, worker_index, p
 
     # put object to s3, format of key: workerID_epoch
     key = "{}_{}".format(worker_index, postfix)
+    print("put file {} to s3".format(key))
     put_object(tmp_bucket, key, vector.tobytes())
 
     # the first worker read and aggregate the corresponding chunk

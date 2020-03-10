@@ -10,6 +10,12 @@ def handler(event, context):
     num_workers = 10
     tmp_bucket = "tmp-params"
     merged_bucket = "merged-params"
+    num_epochs = 10
+    num_admm_epochs = 10
+    learning_rate = 0.1
+    batch_size = 10000
+    lam = 0.01
+    rho = 0.01
 
     clear_bucket(tmp_bucket)
     clear_bucket(merged_bucket)
@@ -21,8 +27,12 @@ def handler(event, context):
     payload['num_workers'] = num_workers
     payload['tmp_bucket'] = tmp_bucket
     payload['merged_bucket'] = merged_bucket
-    payload['lambda'] = 0.01
-    payload['rho'] = 0.01
+    payload['num_epochs'] = num_epochs
+    payload['num_admm_epochs'] = num_admm_epochs
+    payload['learning_rate'] = learning_rate
+    payload['batch_size'] = batch_size
+    payload['lambda'] = lam
+    payload['rho'] = rho
 
     # invoke functions
     lambda_client = boto3.client('lambda')

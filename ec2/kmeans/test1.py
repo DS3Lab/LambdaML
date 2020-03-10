@@ -5,9 +5,6 @@ import sys
 import torch
 import torch.distributed as dist
 import numpy as np
-import logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 import torch.optim as optim
 
 
@@ -48,7 +45,7 @@ def run(args):
 
     train_set = partition_sparse(train_file, args.features)
     train_set = [t[0] for t in train_set]
-    logger.info(f"Loading dataset costs {time.time() - read_start}s")
+    print(f"Loading dataset costs {time.time() - read_start}s")
 
     # initialize centroids
     init_cent_start = time.time()
@@ -58,29 +55,29 @@ def run(args):
     else:
         centroids = torch.empty(args.num_clusters, args.features)
     dist.broadcast(centroids, 0)
-    logger.info(f"Receiving initial centroids costs {time.time() - init_cent_start}s")
+    print(f"Receiving initial centroids costs {time.time() - init_cent_start}s")
 
-    training_start = time.time()
-    for epoch in range(args.epochs):
-        if avg_error >= args.threshold:
-            start_compute = time.time()
-            model = SparseKmeans(train_set, centroids, args.features, args.num_clusters)
-            model.find_nearest_cluster()
-            error = torch.tensor(model.error)
-            end_compute = time.time()
-            logger.info(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
-            centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), error)
-            logger.info(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s")
-        else:
-            logger.info(f"{args.rank}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
-            logger.info(f"Whole process time : {time.time() - training_start}")
-            return
-
+#    training_start = time.time()
+#    for epoch in range(args.epochs):
+#        if avg_error >= args.threshold:
+#            start_compute = time.time()
+#            model = SparseKmeans(train_set, centroids, args.features, args.num_clusters)
+#            model.find_nearest_cluster()
+#            error = torch.tensor(model.error)
+#            end_compute = time.time()
+#            print(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
+#            centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), error)
+#            print(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s")
+#        else:
+#            print(f"{args.rank}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
+#            print(f"Whole process time : {time.time() - training_start}")
+#            return
+#
 
 def init_processes(rank, size, fn, backend='gloo'):
     """ Initialize the distributed environment. """
     os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '22222'
+    os.environ['MASTER_PORT'] = '29500'
     dist.init_process_group(backend, rank=rank, world_size=size)
     fn(rank, size)
 
@@ -115,15 +112,17 @@ def main():
     parser.add_argument('--features', type=int, default=47236)
     parser.add_argument('--communication', type=str, default='all-reduce')
     args = parser.parse_args()
-    logger.info(args)
+    print(args)
 
     dist.init_process_group(
-        backend=args.backend,
-        init_method=args.init_method,
-        world_size=args.world_size,
-        rank=args.rank,
-    )
+                backend=args.backend,
+                init_method=args.init_method,
+                world_size=args.world_size,
+                rank=args.rank,
+            )
+
     run(args)
+    #run_local(args.world_size)
 
 
 if __name__ == '__main__':

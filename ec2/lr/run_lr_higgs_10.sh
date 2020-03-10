@@ -14,7 +14,7 @@ for ((i=0; i<$world_size; i++)); do
 	  source /home/ubuntu/envs/pytorch/bin/activate
 	  cd /home/ubuntu/code/LambdaML/ec2
 	  rm -f $log_file
-	  nohup python higgs_lr_avg_grad.py --init-method tcp://172.31.44.193:24000 --rank 0 --world-size $world_size --root /home/ubuntu/data/higgs/ --no-cuda --batch-size $batch_size > $log_file 2>&1 &
+	  nohup python higgs_lr_grad_avg.py --init-method tcp://172.31.44.193:24000 --rank 0 --world-size $world_size --root /home/ubuntu/data/higgs/ --no-cuda --batch-size $batch_size > $log_file 2>&1 &
 	else
       ssh lambdacluster-node00$i "source /home/ubuntu/envs/pytorch/bin/activate; cd /home/ubuntu/code/LambdaML/ec2; rm -f $log_file; nohup python higgs_lr_avg_grad.py --init-method tcp://172.31.44.193:24000 --rank $i --world-size $world_size --root /home/ubuntu/data/higgs/ --no-cuda --batch-size $batch_size > $log_file 2>&1 &"	
   	fi
