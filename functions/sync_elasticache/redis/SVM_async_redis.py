@@ -15,7 +15,7 @@ from s3.get_object import get_object
 from s3.put_object import put_object
 from sync.sync_grad_redis import *
 
-from model.LogisticRegression import LogisticRegression
+from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss, BinaryClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
 
@@ -32,9 +32,9 @@ b_grad_prefix = "b_grad_"
 
 # algorithm setting
 
-learning_rate = 0.1#np.arange(0.09,0.15,0.01)
+learning_rate = 0.02
 batch_size = 100000
-num_epochs = 55
+num_epochs = 50
 validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
@@ -43,7 +43,7 @@ random_seed = 42
 
 
 def handler(event, context):
-    
+
     startTs = time.time()
     bucket = event['bucket']
     key = event['name']
@@ -51,9 +51,11 @@ def handler(event, context):
     num_classes = event['num_classes']
     elasti_location = event['elasticache']
     endpoint = redis_init(elasti_location)
+    grad_bucket = event['grad_bucket']
+    model_bucket = event['model_bucket']
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
-  
+
     key_splits = key.split("_")
     worker_index = int(key_splits[0])
     #num_worker = int(key_splits[1])
@@ -61,12 +63,12 @@ def handler(event, context):
 
     batch_size = 100000
     batch_size = int(np.ceil(batch_size/num_worker))
-    
+
     torch.manual_seed(random_seed)
-    
+
     sync_meta = SyncMeta(worker_index, num_worker)
     print("synchronization meta {}".format(sync_meta.__str__()))
-    
+
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
     print("read data cost {} s".format(time.time() - startTs))
@@ -74,7 +76,7 @@ def handler(event, context):
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
     print("libsvm operation cost {}s".format(parse_start - preprocess_start))
-   
+
     # Creating data indices for training and validation splits:
     dataset_size = len(dataset)
     print("dataset size = {}".format(dataset_size))
@@ -95,18 +97,18 @@ def handler(event, context):
     validation_loader = torch.utils.data.DataLoader(dataset,
                                                     batch_size=batch_size,
                                                     sampler=valid_sampler)
-    
+
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
-    
-    model = LogisticRegression(num_features, num_classes)
-    
+
+    model = DenseSVM(num_features, num_classes)
+
 
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = BinaryClassHingeLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-    
+
     train_loss = []
     test_loss = []
     test_acc = []
@@ -126,23 +128,28 @@ def handler(event, context):
             outputs = model(items)
             loss = criterion(outputs, labels)
             loss.backward()
-            
+
             w = model.linear.weight.data.numpy()
             b = model.linear.bias.data.numpy()
             file_postfix = "{}_{}".format(batch_index,epoch)
             #asynchronization / shuffle starts from that every worker writes their gradients of this batch and epoch
-            #upload individual gradient
-            hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
-            hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
-            
-            time.sleep(0.005)#
+            #upload individual gradien
+            if batch_index == 0 and epoch == 0:
+                hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
+                hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
+                time.sleep(0.0001)
             #randomly get one gradient from others. (Asynchronized)
-            w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
-            b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)	
+                w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
+                b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)
+            else:
+                w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
+                b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)
+                hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
+                hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
             model.linear.weight.data = torch.from_numpy(w_new)
             model.linear.bias.data = torch.from_numpy(b_new)
             optimizer.step()
-            
+
             #report train loss and test loss for every mini batch
             if (batch_index + 1) % 1 == 0:
                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
@@ -150,17 +157,17 @@ def handler(event, context):
             tmp_train += loss.item()
         total_time += time.time()-epoch_start
         train_loss.append(tmp_train/(batch_index+1))
-        
+
         tmp_test,tmp_acc = test(model,validation_loader,criterion)
         test_loss.append(tmp_test)
         test_acc.append(tmp_acc)
         epoch_start = time.time()
-        
+
     print("total time = {}".format(total_time))
     endTs = time.time()
     print("elapsed time = {} s".format(endTs - startTs))
     loss_record = [test_loss,test_acc,train_loss,total_time]
-    put_object("async-model-loss","async-loss{}".format(worker_index),pickle.dumps(loss_record))
+    put_object("svm-async","async-loss{}".format(worker_index),pickle.dumps(loss_record))
 
 def test(model,testloader,criterion):
     # Test the Model

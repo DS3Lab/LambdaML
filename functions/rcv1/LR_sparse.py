@@ -1,14 +1,9 @@
-import math
 import time
 import urllib.parse
-
-import torch
-from data_loader.LibsvmDataset import SparseLibsvmDataset
 
 from pytorch_model.sparse_lr import *
 from sync.sync_grad import *
 from sync.sync_meta import SyncMeta
-import numpy as np
 
 # lambda setting
 grad_bucket = "sparse-grads"

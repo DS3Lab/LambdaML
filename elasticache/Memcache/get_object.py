@@ -11,7 +11,7 @@ def hget_object(client, key, field):
     :param field: string
     :return: direct bytestream, no need to read from buffer. If error, return None.
     """
-        try:   
+    try:   
         mem_key = key + "_" + field
         response = client.get(key=mem_key)
     except ClientError as e:

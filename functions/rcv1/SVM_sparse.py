@@ -4,7 +4,7 @@ import urllib.parse
 
 import torch
 from data_loader.LibsvmDataset import SparseLibsvmDataset
-
+from s3.get_object import *
 from pytorch_model.sparse_svm import *
 from sync.sync_grad import *
 from sync.sync_meta import SyncMeta
@@ -15,9 +15,7 @@ grad_bucket = "sparse-grads"
 model_bucket = "sparse-updates"
 local_dir = "/tmp"
 w_prefix = "w_"
-b_prefix = "b_"
 w_grad_prefix = "w_grad_"
-b_grad_prefix = "b_grad_"
 
 shuffle_dataset = True
 random_seed = 42
@@ -31,7 +29,6 @@ def handler(event, context):
         batch_size = event["batch_size"]
         num_epochs = event["num_epochs"]
         validation_ratio = event["validation_ratio"]
-        c = event["c"]
 
         # Reading data from S3
         bucket_name = event['bucket_name']
@@ -64,7 +61,7 @@ def handler(event, context):
         val_set = [dataset[i] for i in val_indices]
 
         print("preprocess data cost {} s".format(time.time() - preprocess_start))
-        svm = SparseSVM(train_set, val_set, num_features, num_epochs, learning_rate, batch_size, c)
+        svm = SparseSVM(train_set, val_set, num_features, num_epochs, learning_rate, batch_size)
 
         # Training the Model
         for epoch in range(num_epochs):
@@ -74,63 +71,33 @@ def handler(event, context):
             for batch_idx in range(num_batches):
                 batch_start = time.time()
                 batch_ins, batch_label = svm.next_batch(batch_idx)
-                batch_grad = torch.zeros(svm.n_input, 1, requires_grad=False)
-                batch_bias = np.float(0)
-                train_loss = Loss()
-                train_acc = Accuracy()
+                acc = svm.one_epoch(batch_idx, epoch)
 
-                for i in range(len(batch_ins)):
-                    z = svm.forward(batch_ins[i])
-                    h = svm.sigmoid(z)
-                    loss = svm.loss(h, batch_label[i])
-                    #print("z= {}, h= {}, loss = {}".format(z, h, loss))
-                    train_loss.update(loss, 1)
-                    train_acc.update(h, batch_label[i])
-                    g = svm.backward(batch_ins[i], h.item(), batch_label[i])
-                    batch_grad.add_(g)
-                    batch_bias += np.sum(h.item()-batch_label[i])
-                batch_grad = batch_grad.div(len(batch_ins))
-                batch_bias = batch_bias / len(batch_ins)
-                batch_grad.mul_(-1.0 * learning_rate)
-                svm.grad.add_(batch_grad)
-                svm.bias = svm.bias - batch_bias * learning_rate
-
-                np_grad = svm.grad.numpy().flatten()
-                np_bias = np.array(svm.bias, dtype=np_grad.dtype)
-                print(f"computation takes {time.time() - batch_start}s, bias: {svm.bias}")
-                print(f"np_grad type: {np_grad.dtype}, np_bias type: {np_bias.dtype}")
+                np_grad = svm.weights.numpy().flatten()
+                print(f"computation takes {time.time() - batch_start}s")
 
                 sync_start = time.time()
                 put_object(grad_bucket, w_grad_prefix + str(worker_index), np_grad.tobytes())
-                put_object(grad_bucket, b_grad_prefix + str(worker_index), np_bias.tobytes())
+
                 file_postfix = "{}_{}".format(epoch, batch_idx)
                 if worker_index == 0:
-                    w_grad_merge, b_grad_merge = \
-                        merge_w_b_grads(grad_bucket, num_worker, np_grad.dtype, np_grad.shape, np_bias.shape,
-                                        w_grad_prefix, b_grad_prefix)
-                    b_grad_merge = np.array(b_grad_merge, dtype=w_grad_merge.dtype)
-                    put_merged_w_b_grad(model_bucket, w_grad_merge, b_grad_merge,
-                                        file_postfix, w_grad_prefix, b_grad_prefix)
-                    delete_expired_w_b(model_bucket, epoch, batch_idx, w_grad_prefix, b_grad_prefix)
-                    svm.grad = torch.from_numpy(w_grad_merge).reshape(num_features, 1)
-                    svm.bias = float(b_grad_merge)
-                    print(f"bias {svm.bias}")
+                    w_grad_merge = merge_weights(grad_bucket, num_worker, np_grad.dtype, np_grad.shape)
+                    put_object(model_bucket, w_grad_prefix + file_postfix, w_grad_merge.tobytes())
+                #    delete_expired_w_b(model_bucket, epoch, batch_idx, w_grad_prefix)
+                    svm.weights = torch.from_numpy(w_grad_merge).reshape(num_features, 1)
                 else:
-                    w_grad_merge, b_grad_merge = get_merged_w_b_grad(model_bucket, file_postfix,
-                                                                     np_grad.dtype, np_grad.shape,
-                                                                     np_bias.shape, w_grad_prefix, b_grad_prefix)
-                    svm.grad = torch.from_numpy(w_grad_merge).reshape(num_features, 1)
-                    svm.bias = float(b_grad_merge)
-                    print(f"bias: {svm.bias}")
+                    w_data = get_object_or_wait(model_bucket, w_grad_prefix + file_postfix, 0.1).read()
+                    w_grad_merge = np.frombuffer(w_data, dtype=np_grad.dtype).reshape(np_grad.shape)
+                    svm.weights = torch.from_numpy(w_grad_merge).reshape(num_features, 1)
                 print(f"synchronization cost {time.time() - sync_start}s")
                 print(f"batch takes {time.time() - batch_start}s")
 
                 if (batch_idx + 1) % 10 == 0:
                     print(f"Epoch: {epoch + 1}/{num_epochs}, Step: {batch_idx + 1}/{len(train_indices) / batch_size}, "
-                          f"Loss: {train_loss}")
+                          f"train acc: {acc}")
 
-            val_loss, val_acc = svm.evaluate()
-            print(f"Validation loss: {val_loss}, validation accuracy: {val_acc}")
+            val_acc = svm.evaluate()
+            print(f"validation accuracy: {val_acc}")
             print(f"Epoch takes {time.time() - epoch_start}s")
 
         if worker_index == 0:
