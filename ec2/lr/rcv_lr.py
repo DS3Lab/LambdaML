@@ -2,7 +2,9 @@ import argparse
 import os
 import sys
 import time
-
+import logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 import torch.distributed as dist
 from torch.multiprocessing import Process
 
@@ -29,7 +31,7 @@ def run(args):
     torch.manual_seed(1234)
     train_file = open(args.train_file, 'r').readlines()
     dataset = partition_sparse(train_file, args.features)
-    print(f"Loading dataset costs {time.time() - read_start}s")
+    logger.info(f"Loading dataset costs {time.time() - read_start}s")
 
     preprocess_start = time.time()
     dataset_size = len(dataset)
@@ -42,7 +44,7 @@ def run(args):
 
     train_set = [dataset[i] for i in train_indices]
     val_set = [dataset[i] for i in val_indices]
-    print("preprocess data cost {} s".format(time.time() - preprocess_start))
+    logger.info("preprocess data cost {} s".format(time.time() - preprocess_start))
 
     lr = LogisticRegression(train_set, val_set, args.features, args.epochs, args.learning_rate, args.batch_size)
     training_start = time.time()
@@ -72,27 +74,27 @@ def run(args):
             lr.grad.add_(batch_grad)
             lr.bias = lr.bias - batch_bias * args.learning_rate
             end_compute = time.time()
-            print(f"{args.rank}-th worker finishes computing one batch. Takes {time.time() - end_compute}")
+            logger.info(f"{args.rank}-th worker finishes computing one batch. Takes {time.time() - end_compute}")
 
             weights = np.append(lr.grad.numpy().flatten(), lr.bias)
             
             sync_start = time.time()
             weights_merged = broadcast_average(args, torch.tensor(weights))
             lr.grad, lr.bias = weights_merged[:-1].reshape(args.features, 1), float(weights_merged[-1])
-            print(f"{args.rank}-th worker finishes sychronizing. Takes {time.time() - end_compute}")
+            logger.info(f"{args.rank}-th worker finishes sychronizing. Takes {time.time() - end_compute}")
 
         val_loss, val_acc = lr.evaluate()
-        print(f"Validation loss: {val_loss}, validation accuracy: {val_acc}")
-        print(f"Epoch takes {time.time() - epoch_start}s")
+        logger.info(f"Validation loss: {val_loss}, validation accuracy: {val_acc}")
+        logger.info(f"Epoch takes {time.time() - epoch_start}s")
 
-    print(f"Finishes training. {args.epochs} takes {time.time() - training_start}s.")
+    logger.info(f"Finishes training. {args.epochs} takes {time.time() - training_start}s.")
 
 
 
 def init_processes(rank, size, fn, backend='gloo'):
     """ Initialize the distributed environment. """
     os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '29500'
+    os.environ['MASTER_PORT'] = '23456'
     dist.init_process_group(backend, rank=rank, world_size=size)
     fn(rank, size)
 
@@ -119,19 +121,18 @@ def main():
         help='URL specifying how to initialize the package.')
     parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
-    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('-l', '--learning-rate', type=float, default=1e-3)
     parser.add_argument('--root', type=str, default='data')
-    parser.add_argument('--batch-size', type=int, default=128)
+    parser.add_argument('--batch-size', type=int, default=10000)
     parser.add_argument('--features', type=int, default=47236)
     parser.add_argument('--train-file', type=str, default='data')
     parser.add_argument('--shuffle', type=int, default=1)
     args = parser.parse_args()
     print(args)
 
-    if args.world_size > 1:
-        dist.init_process_group(backend=args.backend, init_method=args.init_method, world_size=args.world_size, rank=args.rank)
+    dist.init_process_group(backend=args.backend, init_method=args.init_method, world_size=args.world_size, rank=args.rank)
 
     run(args)
     # run_local(args.world_size)
