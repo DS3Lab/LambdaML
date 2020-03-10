@@ -9,13 +9,11 @@ from torch.nn import Parameter
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from sync.sync_grad import *
-from sync.sync_reduce_scatter import reduce_scatter_batch_multi_bucket, delete_expired_merged
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 
 from thrift_ps.ps_service import ParameterServer
-from thrift_ps.ps_service.ttypes import Model, Update, Grad, InvalidOperation
 from thrift_ps.client import ps_client
 
 from thrift.transport import TSocket

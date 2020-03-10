@@ -10,6 +10,7 @@ from math import ceil
 from torch.multiprocessing import Process
 
 sys.path.append("../")
+sys.path.append("../../")
 
 from ec2.trainer import Trainer
 from ec2.data_partition import partition_higgs
