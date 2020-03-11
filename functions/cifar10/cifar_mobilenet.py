@@ -7,12 +7,12 @@ import boto3
 import time
 import json 
 
-from sync.sync_meta import SyncMeta
-from models import *
-from training_test import train, test
+# from sync.sync_meta import SyncMeta
+from pytorch_model.cifar10 import MobileNet
+from functions.CIFAR10.async_train_test import async_train, test
 
 # number of epochs that can be finished within 15min
-num_epoch_fn = 6
+num_epoch_fn = 5
 
 local_dir = "/tmp"
 
@@ -33,9 +33,9 @@ sync_step = 39
 #comm_pattern = 'centralized'
 
 # learning algorithm setting
-learning_rate = 0.1
+learning_rate = 0.15
 batch_size = 128
-num_epochs = 80
+num_epochs = 160
 
 s3 = boto3.resource('s3')
 
@@ -49,9 +49,10 @@ def handler(event, context):
     
     key = 'training_{}.pt'.format(worker_index)
     print('data_bucket = {}\n worker_index:{}\n num_worker:{}\n key:{}'.format(bucket, worker_index, num_worker, key))
+    print('Learning Rate: {}'.format(learning_rate))
 
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
+    # sync_meta = SyncMeta(worker_index, num_worker)
+    # print("synchronization meta {}".format(sync_meta.__str__()))
 
     # read file from s3
     readS3_start = time.time()
@@ -62,7 +63,7 @@ def handler(event, context):
     trainset = torch.load(os.path.join(local_dir, training_file))
     testset = torch.load(os.path.join(local_dir, test_file))
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False)
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
     
     device = 'cpu'
@@ -91,7 +92,7 @@ def handler(event, context):
 
     net = net.to(device)
     # criterion = F.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9)
+    optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=5e-4)
     
     # load checkpoint if it is not the first round
     if roundID != 0:
@@ -99,7 +100,7 @@ def handler(event, context):
         checked_epoch = roundID * num_epoch_fn - 1
         checked_key = '{}_{}.pt'.format(worker_index, checked_epoch)
         
-        s3.Bucket('cifar10.checkpoint').download_file(checked_key, os.path.join(local_dir, checkpoint_file))
+        s3.Bucket('cifar10.checkpoint.3').download_file(checked_key, os.path.join(local_dir, checkpoint_file))
         
         checkpoint = torch.load(os.path.join(local_dir, checkpoint_file))
         
@@ -113,7 +114,7 @@ def handler(event, context):
         
         epoch_global = roundID * num_epoch_fn + epoch
         
-        train_loss, train_acc = train(epoch_global, net, trainloader, optimizer, device, worker_index, num_worker, sync_mode, sync_step)
+        train_loss, train_acc = async_train(epoch_global, net, trainloader, optimizer, device, worker_index, num_worker, sync_mode, sync_step)
         
         test_loss, test_acc = test(epoch_global, net, testloader, device)
         
@@ -144,7 +145,7 @@ def handler(event, context):
             
             torch.save(checkpoint, os.path.join(local_dir, checkpoint_file))
             # format of checkpoint: workerID_epochID
-            s3.Bucket('cifar10.checkpoint').upload_file(os.path.join(local_dir, checkpoint_file), '{}_{}.pt'.format(worker_index, epoch_global))
+            s3.Bucket('cifar10.checkpoint.3').upload_file(os.path.join(local_dir, checkpoint_file), '{}_{}.pt'.format(worker_index, epoch_global))
             print("Epoch {} in Round {} saved!".format(epoch_global+1, roundID))
             
             
@@ -156,7 +157,7 @@ def handler(event, context):
                'rank': event['rank'],
                'roundID': event['roundID']+1
             }
-            lambda_client.invoke(FunctionName='cifar10_F2', InvocationType='Event', Payload=json.dumps(payload))
+            lambda_client.invoke(FunctionName='async_mobile_3', InvocationType='Event', Payload=json.dumps(payload))
         
         
             

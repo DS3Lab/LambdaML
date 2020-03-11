@@ -13,11 +13,11 @@ from sync.sync_neural_network import *
 from sync.sync_meta import SyncMeta
 
 
-merged_bucket = "merged-value"
-tmp_bucket = "tmp-value"
+# merged_bucket = "merged-value"
+tmp_bucket = "async.3"
 
-weights_prefix = 'w_'
-gradients_prefix = 'g_'
+# weights_prefix = 'w_'
+# gradients_prefix = 'g_'
 
 
 class Accuracy(object):
@@ -66,14 +66,15 @@ def async_train(epoch, net, trainloader, optimizer, device, worker_index, num_wo
     
     epoch_start = time.time()
     
-    epoch_sync_time = 0
+    epoch_comm_time = 0
     num_batch = 0
     
     train_acc = Accuracy()
     train_loss = Average()
+    
 
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-
+        
         # print("------worker {} epoch {} batch {}------".format(worker_index, epoch+1, batch_idx+1))
         batch_start = time.time()
 
@@ -83,31 +84,42 @@ def async_train(epoch, net, trainloader, optimizer, device, worker_index, num_wo
         
         optimizer.zero_grad()
         loss.backward()
-
         optimizer.step()
 
+        comm_start = time.time()
+        
+        
         # get local model
         weights = [param.data.numpy() for param in net.parameters()]
+        # print('Before comm:{}'.format(weights[0][0]))
+        
         # push local model
         put_object(tmp_bucket, 'latest_model', pickle.dumps(weights))
+        
         # pull the latest model
-        new_model = get_object_or_wait(tmp_bucket, 'latest_model', 0.1).read()
+        time.sleep(0.3)
+        new_model = get_object_or_wait(tmp_bucket, 'latest_model', 0.5).read()
         new_model_np = pickle.loads(new_model)
         # update local model
         for layer_index, param in enumerate(net.parameters()):
             param.data = torch.from_numpy(new_model_np[layer_index])
+            
+        # weights_after = [param.data.numpy() for param in net.parameters()]
+        # print('After comm:{}'.format(weights_after[0][0]))
+            
+        epoch_comm_time += time.time() - comm_start
                     
         
         train_acc.update(outputs, targets)
         train_loss.update(loss.item(), inputs.size(0))
         
         if num_batch%10 == 0:
-            print("Epoch {} Batch {} training Loss:{}, Acc:{}".format(epoch+1, num_batch, train_loss, train_acc))
+            print("Epoch {} Batch {} training Loss:{}, training accuracy:{}".format(epoch+1, num_batch, train_loss, train_acc))
         
         num_batch += 1
         
     epoch_time = time.time() - epoch_start
-    print("Epoch {} has {} batches, time = {} s, sync time = {} s, cal time = {} s".format(epoch+1, num_batch, epoch_time, epoch_sync_time, epoch_time - epoch_sync_time))
+    print("Epoch {} has {} batches, time = {} s, comm time = {} s, cal time = {} s".format(epoch+1, num_batch, epoch_time, epoch_comm_time, epoch_time - epoch_comm_time))
     
     return train_loss, train_acc
 
