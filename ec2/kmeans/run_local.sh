@@ -11,7 +11,7 @@ if [ $world_size == 1 ]
 then
   nohup python3.6 /home/ubuntu/LambdaML/ec2/kmeans/rcv_kmeans.py --rank 0 --communication all-reduce -k $nr_cluster --world-size $world_size --train-file /home/ubuntu/dataset/rcv --no-cuda > "/home/ubuntu/log/kmeans_single_${nr_cluster}.txt" 2>&1 &
 else
-  for ((i=0; i<world_size; i++)); do
-    nohup python3.6 /home/ubuntu/LambdaML/ec2/kmeans/rcv_kmeans.py --rank $i --communication all-reduce --epochs 2 -k $nr_cluster --world-size $world_size --train-file "${train_path}/${i}_${world_size}" --no-cuda > "/home/ubuntu/log/kmeans_onenode_${i}_${world_size}_${nr_cluster}.txt" 2>&1 & 
+  for ((i=1; i<$world_size; i++)); do
+    nohup python3.6 /home/ubuntu/LambdaML/ec2/kmeans/rcv_kmeans.py --rank $i --communication all-reduce --epochs 5 -k $nr_cluster --world-size $world_size --train-file "${train_path}/${i}_${world_size}" --no-cuda >> "/home/ubuntu/log/kmeans_r${i}_w${world_size}_k${nr_cluster}.txt" 2>&1 & 
   done
 fi

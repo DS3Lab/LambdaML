@@ -6,17 +6,14 @@ import torch
 import torch.distributed as dist
 import numpy as np
 import logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 import torch.optim as optim
-
 
 sys.path.append("../../")
 
 from ec2.data_partition import partition_sparse
 from pytorch_model.sparse_kmeans import SparseKmeans
 from torch.multiprocessing import Process
-
+from data_loader.LibsvmDataset import SparseLibsvmDataset
 
 def broadcast_average(args, centroid_tensor, error_tensor):
     if args.communication == "all-reduce":
@@ -43,12 +40,13 @@ def run(args):
     torch.manual_seed(1234)
     read_start = time.time()
     avg_error = np.iinfo(np.int16).max
+    logging.info(f"{args.rank}-th worker starts.")
 
     train_file = open(args.train_file, 'r').readlines()
 
-    train_set = partition_sparse(train_file, args.features)
+    train_set = SparseLibsvmDataset(train_file, args.features)
     train_set = [t[0] for t in train_set]
-    logger.info(f"Loading dataset costs {time.time() - read_start}s")
+    logging.info(f"Loading dataset costs {time.time() - read_start}s")
 
     # initialize centroids
     init_cent_start = time.time()
@@ -58,7 +56,7 @@ def run(args):
     else:
         centroids = torch.empty(args.num_clusters, args.features)
     dist.broadcast(centroids, 0)
-    logger.info(f"Receiving initial centroids costs {time.time() - init_cent_start}s")
+    logging.info(f"Receiving initial centroids costs {time.time() - init_cent_start}s")
 
     training_start = time.time()
     for epoch in range(args.epochs):
@@ -68,12 +66,12 @@ def run(args):
             model.find_nearest_cluster()
             error = torch.tensor(model.error)
             end_compute = time.time()
-            logger.info(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
+            logging.info(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
             centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), error)
-            logger.info(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s")
+            logging.info(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s")
         else:
-            logger.info(f"{args.rank}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
-            logger.info(f"Whole process time : {time.time() - training_start}")
+            logging.info(f"{args.rank}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
+            logging.info(f"Whole process time : {time.time() - training_start}")
             return
 
 
@@ -103,7 +101,7 @@ def main():
         '-i',
         '--init-method',
         type=str,
-        default='tcp://127.0.0.1:22222',
+        default='tcp://127.0.0.1:19226',
         help='URL specifying how to initialize the package.')
     parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
@@ -115,7 +113,8 @@ def main():
     parser.add_argument('--features', type=int, default=47236)
     parser.add_argument('--communication', type=str, default='all-reduce')
     args = parser.parse_args()
-    logger.info(args)
+    logging.basicConfig(filename=f"/home/ubuntu/log/rcv_kmeans_r{args.rank}_w{args.world_size}_k{args.num_clusters}", filemode='a', level=logging.DEBUG, format='%(name)s - %(levelname)s - %(message)s')
+    logging.info(args)
 
     dist.init_process_group(
         backend=args.backend,
