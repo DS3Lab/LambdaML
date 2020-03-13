@@ -14,6 +14,13 @@ from data_loader.LibsvmDataset import SparseLibsvmDataset
 from random import Random
 
 
+def dist_is_initialized():
+    if dist.is_available():
+        if dist.is_initialized():
+            return True
+    return False
+
+
 class Partition(object):
     """ Dataset-like object, but only access a subset of it. """
 
@@ -86,11 +93,15 @@ def partition_cifar10(batch_size, path, download=True):
 
     train_dataset = datasets.CIFAR10(path, train=True, download=download, transform=transform_train)
     test_dataset = datasets.CIFAR10(path, train=False, download=download, transform=transform_test)
-    size = dist.get_world_size()
+    size = 1
+    rank = 0
+    if dist_is_initialized():
+        size = dist.get_world_size()
+        rank = dist.get_rank()
     bsz = int(batch_size / float(size))
     train_partition_sizes = [1.0 / size for _ in range(size)]
     train_partition = DataPartitioner(train_dataset, train_partition_sizes)
-    train_partition = train_partition.use(dist.get_rank())
+    train_partition = train_partition.use(rank)
     train_loader = DataLoader(
         train_partition, batch_size=bsz, shuffle=True)
     test_loader = DataLoader(
@@ -146,9 +157,13 @@ def partition_agaricus(batch_size, train_file, test_file):
 
 def partition_sparse(file, num_feature):
     train_dataset = SparseLibsvmDataset(file, num_feature)
-    size = dist.get_world_size()
+    size = 1
+    rank = 0
+    if dist_is_initialized():
+        size = dist.get_world_size()
+        rank = dist.get_rank()
     train_partition_sizes = [1.0 / size for _ in range(size)]
     train_partition = DataPartitioner(train_dataset, train_partition_sizes)
-    train_partition = train_partition.use(dist.get_rank())
+    train_partition = train_partition.use(rank)
     return train_partition
 

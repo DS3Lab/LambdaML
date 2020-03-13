@@ -6,11 +6,13 @@ import torch
 import torch.distributed as dist
 import numpy as np
 import logging
+import torch.optim as optim
+
 sys.path.append("../../")
 
-from ec2.data_partition import partition_agaricus
-from pytorch_model.sparse_kmeans import SparseKmeans
-
+from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from torch.multiprocessing import Process
+from model.Kmeans import Kmeans
 
 def broadcast_average(args, centroid_tensor, error_tensor):
     if args.communication == "all-reduce":
@@ -33,25 +35,24 @@ def broadcast_average(args, centroid_tensor, error_tensor):
 
 
 def run(args):
-    device = torch.device('cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
     torch.manual_seed(1234)
     read_start = time.time()
     avg_error = np.iinfo(np.int16).max
-    logging.info(f"Worker {args.rank} starts.")
+    logging.info(f"{args.rank}-th worker starts.")
 
-    train_file = open("/home/ubuntu/LambdaML/dataset/agaricus_127d_train.libsvm", 'r').readlines()
-    test_file = open("/home/ubuntu/LambdaML/dataset/agaricus_127d_test.libsvm", 'r').readlines()
-    logging.info(f"Reading train and test files.")
+    train_file = open(args.train_file, 'r').readlines()
 
-    train_set, _, _, test_set = partition_agaricus(1, train_file, test_file)
-    train_set = [t[0] for t in train_set]
+    train_set = DenseLibsvmDataset2(train_file, args.features).ins_np
+    dt = train_set.dtype
+    centroid_shape = (args.num_clusters, train_set.shape[1])
     logging.info(f"Loading dataset costs {time.time() - read_start}s")
+    logging.info(f"centorid shape: {centroid_shape}")
 
     # initialize centroids
     init_cent_start = time.time()
     if args.rank == 0:
-        c_dense_list = [t.to_dense() for t in train_set[:args.num_clusters]]
-        centroids = torch.stack(c_dense_list).reshape(args.num_clusters, args.features)
+        centroids = torch.tensor(train_set[0:args.num_clusters])
     else:
         centroids = torch.empty(args.num_clusters, args.features)
     dist.broadcast(centroids, 0)
@@ -61,13 +62,12 @@ def run(args):
     for epoch in range(args.epochs):
         if avg_error >= args.threshold:
             start_compute = time.time()
-            model = SparseKmeans(train_set, centroids, args.features, args.num_clusters)
+            model = Kmeans(train_set, centroids, avg_error, centroid_type='tensor')
             model.find_nearest_cluster()
-            error = torch.tensor(model.error)
             end_compute = time.time()
             logging.info(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
-            centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), error)
-            logging.info(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s")
+            centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), torch.tensor(model.error))
+            logging.info(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s. Loss: {model.error}")
         else:
             logging.info(f"{args.rank}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
             logging.info(f"Whole process time : {time.time() - training_start}")
@@ -77,9 +77,20 @@ def run(args):
 def init_processes(rank, size, fn, backend='gloo'):
     """ Initialize the distributed environment. """
     os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '29500'
+    os.environ['MASTER_PORT'] = '22222'
     dist.init_process_group(backend, rank=rank, world_size=size)
     fn(rank, size)
+
+
+def run_local(size):
+    processes = []
+    for rank in range(size):
+        p = Process(target=init_processes, args=(rank, size, run))
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
 
 
 def main():
@@ -91,26 +102,25 @@ def main():
         type=str,
         default='tcp://127.0.0.1:23456',
         help='URL specifying how to initialize the package.')
-    parser.add_argument('-s', '--world-size', type=int, default=16, help='Number of processes participating in the job.')
+    parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
-    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--no-cuda', action='store_true')
-    parser.add_argument('-k', '--num-clusters', type=int, default=20)
-    parser.add_argument('--batch-size', type=int, default=128)
-    parser.add_argument('--threshold', type=float, default=0.02)
-    parser.add_argument('--features', type=int, default=127)
+    parser.add_argument('-k', '--num-clusters', type=int, default=10)
+    parser.add_argument('--train-file', type=str, default='data')
+    parser.add_argument('--threshold', type=float, default=0.0002)
+    parser.add_argument('--features', type=int, default=28)
     parser.add_argument('--communication', type=str, default='all-reduce')
     args = parser.parse_args()
-    logging.basicConfig(filename=f"/home/ubuntu/log/agaricus_r{args.rank}_w{args.world_size}_k{args.num_clusters}", filemode='a', level=logging.DEBUG, format='%(name)s - %(levelname)s - %(message)s')
-
+    logging.basicConfig(filename=f"/home/ubuntu/log/higgs_kmeans_r{args.rank}_w{args.world_size}_k{args.num_clusters}", filemode='a', level=logging.DEBUG, format='%(name)s - %(levelname)s - %(message)s')
     logging.info(args)
 
     dist.init_process_group(
-            backend=args.backend,
-            init_method=args.init_method,
-            world_size=args.world_size,
-            rank=args.rank,
-        )
+        backend=args.backend,
+        init_method=args.init_method,
+        world_size=args.world_size,
+        rank=args.rank,
+    )
     run(args)
 
 

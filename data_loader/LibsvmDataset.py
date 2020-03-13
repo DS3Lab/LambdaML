@@ -28,6 +28,8 @@ class SparseLibsvmDataset(Dataset):
         if len(splits) < 1:
             return
         label = int(splits[0])
+        if label == -1:
+            label = 0
         indices_row = []
         indices_col = []
         values = []
@@ -146,10 +148,6 @@ def main():
     test_data = SparseLibsvmDataset(test_file, 127)
 
     print(train_data.__getitem__(0)[0])
-
-    # for batch_idx, (ins, label) in enumerate(dataset_loader):
-    #     print(ins)
-    #     print(label)
 
 
 if __name__ == '__main__':

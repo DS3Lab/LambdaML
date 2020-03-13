@@ -46,7 +46,8 @@ def reduce_batch(vector, tmp_bucket, merged_bucket, num_workers, worker_index, p
                         delete_list.append(file_key)
                 delete_objects(tmp_bucket, delete_list)
         # write the merged data back to s3
-        put_object(merged_bucket, 'merged_' + postfix, merged_vec.tobytes())
+        merged_file_name = 'merged_' + postfix
+        put_object(merged_bucket, merged_file_name, merged_vec.tobytes())
         delete_expired_merged_batch(merged_bucket, curr_epoch, curr_batch)
     else:
         merged_file_name = 'merged_' + postfix
@@ -66,6 +67,7 @@ def reduce_epoch(vector, tmp_bucket, merged_bucket, num_workers, worker_index, p
 
     # put object to s3, format of key: workerID_epoch
     key = "{}_{}".format(worker_index, postfix)
+    print("put file {} to s3".format(key))
     put_object(tmp_bucket, key, vector.tobytes())
 
     # the first worker read and aggregate the corresponding chunk
