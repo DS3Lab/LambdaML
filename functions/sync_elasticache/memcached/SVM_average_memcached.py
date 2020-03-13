@@ -16,7 +16,7 @@ from s3.get_object import get_object
 from s3.put_object import put_object
 
 
-from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss
+from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss,BinaryClass
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
 # lambda setting
@@ -102,7 +102,7 @@ def handler(event, context):
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
-    criterion = MultiClassHingeLoss()
+    criterion = BinaryClassHingeLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
     train_loss = []

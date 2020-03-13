@@ -95,7 +95,7 @@ def handler(event, context):
             avg_error, centroids = process_centroid(cent_with_error, num_clusters, dt, True)
         if avg_error >= threshold:
             print("get new centro")
-            res = get_new_centroids(dataset, dataset_type, centroids, epoch, num_features, num_clusters, dt)
+            res = get_new_centroids(dataset, dataset_type, centroids, epoch, num_features, num_clusters)
             #dt = res.dtype
             sync_start = time.time()
             success = hset_object(elastic_endpoint, worker_cent_bucket, f"{worker_index}_{epoch}", res.tobytes())

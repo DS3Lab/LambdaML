@@ -131,13 +131,19 @@ def handler(event, context):
             file_postfix = "{}_{}".format(batch_index,epoch)
             #asynchronization / shuffle starts from that every worker writes their gradients of this batch and epoch
             #upload individual gradient
-            hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
-            hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
+            if batch_index == 0 and epoch ==0:
+                hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
+                hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
 
-            time.sleep(0.0001)#
-            #randomly get one gradient from others. (Asynchronized)
-            w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
-            b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)
+                time.sleep(0.0001)#
+                #randomly get one gradient from others. (Asynchronized)
+                w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
+                b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)
+            else:
+                w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
+                b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)
+                hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
+                hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
             model.linear.weight.data = torch.from_numpy(w_new)
             model.linear.bias.data = torch.from_numpy(b_new)
             optimizer.step()

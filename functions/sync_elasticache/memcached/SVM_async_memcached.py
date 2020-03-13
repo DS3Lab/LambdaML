@@ -14,9 +14,9 @@ from sync.sync_grad_memcached import *
 
 from s3.get_object import get_object
 from s3.put_object import put_object
+from sync.sync_grad_redis import *
 
-
-from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss
+from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss, BinaryClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from sync.sync_meta import SyncMeta
 
@@ -33,9 +33,9 @@ b_grad_prefix = "b_grad_"
 
 # algorithm setting
 
-learning_rate = 0.1
+learning_rate = 0.02
 batch_size = 100000
-num_epochs = 55
+num_epochs = 50
 validation_ratio = .2
 shuffle_dataset = True
 random_seed = 42
@@ -52,6 +52,8 @@ def handler(event, context):
     num_classes = event['num_classes']
     elasti_location = event['elasticache']
     endpoint = memcached_init(elasti_location)
+    grad_bucket = event['grad_bucket']
+    model_bucket = event['model_bucket']
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
 
@@ -59,9 +61,6 @@ def handler(event, context):
     worker_index = int(key_splits[0])
     #num_worker = int(key_splits[1])
     num_worker = event['num_files']
-
-    model_bucket = event['model_bucket']
-    grad_bucket = event['grad_bucket']
 
     batch_size = 100000
     batch_size = int(np.ceil(batch_size/num_worker))
@@ -108,7 +107,7 @@ def handler(event, context):
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
-    criterion = MultiClassHingeLoss()
+    criterion = BinaryClassHingeLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
     train_loss = []
@@ -135,14 +134,19 @@ def handler(event, context):
             b = model.linear.bias.data.numpy()
             file_postfix = "{}_{}".format(batch_index,epoch)
             #asynchronization / shuffle starts from that every worker writes their gradients of this batch and epoch
-            #upload individual gradient
-            hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
-            hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
-
-            time.sleep(0.0001)#
+            #upload individual gradien
+            if batch_index == 0 and epoch == 0:
+                hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
+                hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
+                time.sleep(0.0001)
             #randomly get one gradient from others. (Asynchronized)
-            w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
-            b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)
+                w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
+                b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)
+            else:
+                w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
+                b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)
+                hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
+                hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
             model.linear.weight.data = torch.from_numpy(w_new)
             model.linear.bias.data = torch.from_numpy(b_new)
             optimizer.step()
@@ -153,7 +157,7 @@ def handler(event, context):
                       % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
             tmp_train += loss.item()
         total_time += time.time()-epoch_start
-        train_loss.append(tmp_train)
+        train_loss.append(tmp_train/(batch_index+1))
 
         tmp_test,tmp_acc = test(model,validation_loader,criterion)
         test_loss.append(tmp_test)
@@ -164,7 +168,7 @@ def handler(event, context):
     endTs = time.time()
     print("elapsed time = {} s".format(endTs - startTs))
     loss_record = [test_loss,test_acc,train_loss,total_time]
-    put_object("async-model-loss","async-loss{}".format(worker_index),pickle.dumps(loss_record))
+    put_object("svm-async","async-loss{}".format(worker_index),pickle.dumps(loss_record))
 
 def test(model,testloader,criterion):
     # Test the Model

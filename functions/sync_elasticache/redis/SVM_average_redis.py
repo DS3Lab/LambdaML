@@ -7,13 +7,14 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from elasticache.Redis.set_object import hset_object
-from elasticache.Redis.counter import hcounter
-from elasticache.Redis.get_object import hget_object
-from elasticache.Redis.__init__ import redis_init
+from elasticache.Memcached.set_object import hset_object
+from elasticache.Memcached.get_object import hget_object
+from elasticache.Memcached.__init__ import memcached_init
+from sync.sync_grad_memcached import *
+
 from s3.get_object import get_object
 from s3.put_object import put_object
-from sync.sync_grad_redis import *
+
 
 from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss, BinaryClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
@@ -46,7 +47,7 @@ def handler(event, context):
     num_features = event['num_features']
     num_classes = event['num_classes']
     elasti_location = event['elasticache']
-    endpoint = redis_init(elasti_location)
+    endpoint = memcached_init(elasti_location)
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
 
@@ -193,5 +194,3 @@ def handler(event, context):
     print("elapsed time = {} s".format(endTs - startTs))
     loss_record = [test_loss,test_acc,train_loss,epoch_time]
     put_object("svm-model-average","average_loss{}".format(worker_index),pickle.dumps(loss_record))
-
-        
