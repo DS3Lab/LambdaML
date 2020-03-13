@@ -3,18 +3,18 @@ import urllib
 
 import numpy as np
 
-from elasticache.Memcache.list_keys import hlist_keys
-from elasticache.Memcache.get_object import hget_object,hget_object_or_wait
-from elasticache.Memcache.set_object import hset_object
-from elasticache.Memcache.delete_keys import hdelete_keys,hdelete_key
-from elasticache.Memcache.clear_all import clear_all
+from elasticache.Memcached.list_keys import hlist_keys
+from elasticache.Memcached.get_object import hget_object,hget_object_or_wait
+from elasticache.Memcached.set_object import hset_object
+from elasticache.Memcached.delete_keys import hdelete_keys,hdelete_key
+from elasticache.Memcached.clear_all import clear_all
 
 
 import pickle
 
 def merge_w_b_layers(endpoint, bucket_name, num_workers, prefix):
     #whatever merges w/b grads or model
-    num_files = 0 
+    num_files = 0
     merged_value = []
     candidate = []
     split = []
@@ -28,9 +28,9 @@ def merge_w_b_layers(endpoint, bucket_name, num_workers, prefix):
     #group = len(candidate)
     count = 0
     while num_files < num_workers :#or candidate != []:
-        
+
         objects= hlist_keys(endpoint, candidate)#[count%group])
-        
+
         while objects is not None :#or candidate != []:
             #file_keys = []
             print(objects.keys())
@@ -44,14 +44,14 @@ def merge_w_b_layers(endpoint, bucket_name, num_workers, prefix):
                 for i in range(len(data)):
                     if num_files == 0:
                         merged_value.append(np.zeros(data[i].shape, dtype=data[i].dtype))
-                        
+
                     merged_value[i] = merged_value[i] + data[i]
                 #print("{} is being deleted? {}".format(file_key,hdelete_keys(endpoint, [file_key])))
-            
+
                 num_files = num_files + 1
                 hdelete_key(endpoint, file_key)
             #file_keys = list(objects.keys())
-            
+
             objects= hlist_keys(endpoint, candidate)#[count%group])
             count = count +1
             print(num_workers-num_files)
@@ -78,7 +78,7 @@ def get_merged_w_b_layers(endpoint, bucket_name, prefix, file_postfix):
     return merged_value_np
 
 def delete_expired_w_b_layers(endpoint,bucket_name, cur_epoch, cur_batch, prefix,end):
-    
+
     if cur_batch ==0:
         if cur_epoch !=0:
             expired = [bucket_name+"_"+prefix+str(cur_epoch-1)+"_"+str(end)]
@@ -86,8 +86,8 @@ def delete_expired_w_b_layers(endpoint,bucket_name, cur_epoch, cur_batch, prefix
             return
     else:
         expired = bucket_name+"_"+prefix+str(cur_epoch)+"_"+str(cur_batch-1)
-            
-    
+
+
     #expired = [bucket_name+"_"+prefix+str(cur_epoch)+"_"+str(cur_batch)]
     hdelete_key(endpoint, expired)
 
@@ -103,7 +103,7 @@ def delete_expired_w_b_layers(endpoint,bucket_name, cur_epoch, cur_batch, prefix
 
 #mergence for single file
 
-   
+
 def merge_w_b_grads(endpoint, bucket_name, num_workers,
                     dtype, w_shape, b_shape,
                     w_grad_prefix="w_grad_", b_grad_prefix="b_grad_"):
@@ -120,7 +120,7 @@ def merge_w_b_grads(endpoint, bucket_name, num_workers,
     while num_w_files < num_workers or num_b_files < num_workers:
         file_keys = []
         objects = hlist_keys(endpoint,candidate)
-        
+
         if objects is not None:
             print(objects.keys())
             for key,value in objects.items():
@@ -144,10 +144,10 @@ def merge_w_b_grads(endpoint, bucket_name, num_workers,
             hdelete_keys(endpoint,file_keys)
             #objects = hlist_keys(endpoint,bucket_name)
             #print("the keys being deleted = {}".format(objects))
-        
+
     return w_grad_sum/num_workers, b_grad_sum/num_workers
 
-                            
+
 
 
 def put_merged_w_b_grads(endpoint, bucket_name, w_grad, b_grad,file_postfix,
@@ -161,26 +161,25 @@ def put_merged_w_b_grads(endpoint, bucket_name, w_grad, b_grad,file_postfix,
 def get_merged_w_b_grads(endpoint, bucket_name, file_postfix,
                         dtype, w_shape, b_shape,
                         w_prefix="w_grad_", b_prefix="b_grad"):
-  
-    
+
+
     #print("get merged weight {} in bucket {}".format(w_prefix+file_postfix , bucket_name))
 
     w_grad = np.fromstring(hget_object_or_wait(endpoint, bucket_name,  w_prefix + file_postfix , 0.00001), dtype).reshape(w_shape)
-    
+
 
     #print('get merged bias {} in bucket {}'.format(b_prefix+file_postfix, bucket_name))
     b_grad = np.fromstring(hget_object_or_wait(endpoint, bucket_name, b_prefix + file_postfix, 0.00001), dtype).reshape(b_shape)
-    
-    return w_grad, b_grad 
+
+    return w_grad, b_grad
 def delete_expired_w_b_grads(endpoint, bucket_name, cur_epoch, cur_batch,
                         w_prefix="w_grad_", b_prefix="b_grad"):#,end):
-                            
+
     w_expired = [w_prefix+str(cur_epoch)+""+str(cur_batch-1),w_prefix+str(cur_epoch-1)+""+str(end-1)]
     b_expired = [b_prefix+str(cur_epoch)+""+str(cur_batch-1),b_prefix+str(cur_epoch-1)+""+str(end-1)]
     hdelete_keys(endpoint, bucket_name, w_expired+b_expired)
-               
+
 
 def clear_bucket(endpoint):
     endpoint.flush_all()
-    return True 
-  
+    return True

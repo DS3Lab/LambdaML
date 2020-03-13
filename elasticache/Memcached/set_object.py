@@ -1,18 +1,18 @@
 import logging
 import memcache
 from botocore.exceptions import ClientError
-from elasticache.Memcache.list_keys import hlist_keys
+from elasticache.Memcached.list_keys import hlist_keys
 
 def hset_object(client, key, field, src_data):
     """Add value from configured memcache under specified key of certain hashtable
-    
+
     :param client: string
     :param field: string
     :param key: string
     :param src_data: bytesstream, int, string
     :return: True if src_data was added to memcache at client under key, otherwise False
     """
-    
+
     if isinstance(src_data,bytes) or isinstance(src_data,str) or isinstance(src_data,int):
         object_data = src_data
     else:
@@ -25,16 +25,12 @@ def hset_object(client, key, field, src_data):
     # Set the object
     try:
         mem_key = key + "_" + field
-        #print("file_key = {}".format(mem_key))
-        #print(object_data)
         response = client.set(mem_key,object_data)
-        #print(response)
     except ClientError as e:
-        # AllAccessDisabled error == client lost
         logging.error(e)
         return False
     return response
-        
+
 
 def handler(event,context):
     mc = 'convergence.fifamc.cfg.euc1.cache.amazonaws.com'

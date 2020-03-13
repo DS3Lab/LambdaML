@@ -21,10 +21,19 @@ if __name__ == "__main__":
     batch_size = 1000
     torch.manual_seed(random_seed)
     learning_rate = 0.1
+
+    #print(train_dataset.shape)
+    m = torch.mean(train_dataset,1)
+    std = torch.std(train_dataset,1)
+    train_dataset = (train_dataset-m)/std
+    validation_dataset = (validation_dataset-m)/std
+
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size)
     validation_loader = torch.utils.data.DataLoader(validation_dataset,
                                                     batch_size=batch_size)
+
+
     model = DenseSVM(num_features,num_class)
     #criterion = torch.nn.modules.MultiLabelMarginLoss()
     #criterion = torch.nn.modules.MultiLabelMarginLoss()

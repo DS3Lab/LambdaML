@@ -1,24 +1,21 @@
 import urllib.parse
-import boto3
+#import boto3
 import logging
 import time
 import numpy as np
 
-from sync.sync_centroids_elastic import compute_average_centroids
-from elasticache.Redis.get_object import hget_object_or_wait
-from elasticache.Redis.set_object import hset_object
+from sync.sync_centroids_memcached import compute_average_centroids
+from elasticache.Memcached.get_object import hget_object_or_wait
+from elasticache.Memcached.set_object import hset_object
 from s3.get_object import get_object
-from elasticache.Redis.__init__ import redis_init
-from data_loader.LibsvmDataset import DenseLibsvmDataset2, SparseLibsvmDataset
+from elasticache.Memcached.__init__ import memcached_init
+from data_loader.LibsvmDataset import DenseLibsvmDataset, SparseLibsvmDataset
 from sync.sync_meta import SyncMeta
 from functions.kmeans.utils import store_centroid_as_numpy, process_centroid, get_new_centroids
-
 
 # setting
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-redis_location = "test-001.fifamc.0001.euc1.cache.amazonaws.com"
-elastic_endpoint = redis_init(redis_location)
 
 
 def lambda_handler(event, context):
@@ -31,14 +28,15 @@ def lambda_handler(event, context):
     num_epochs = event["num_epochs"]
     threshold = event["threshold"]
     dataset_type = event["dataset_type"]
-
-    # Reading data from S3
+    elastic_location = event["elasticache"]
+    elastic_endpoint = memcached_init(elastic_location)
+    Reading data from S3
     bucket_name = event['bucket_name']
     key = urllib.parse.unquote_plus(event['key'], encoding='utf-8')
     logger.info(f"Reading training data from bucket = {bucket_name}, key = {key}")
     key_splits = key.split("_")
-    worker_index = int(key_splits[0])
-    num_worker = int(key_splits[1])
+    worker_index = 0
+    num_worker = 1
     sync_meta = SyncMeta(worker_index, num_worker)
     logger.info(f"Synchronizing meta {sync_meta.__str__()}")
 
@@ -50,6 +48,7 @@ def lambda_handler(event, context):
     if dataset_type == "dense":
         # dataset is stored as numpy array
         dataset = DenseLibsvmDataset2(file, num_features).ins_np
+        print(len(dataset))
         dt = dataset.dtype
         centroid_shape = (num_clusters, dataset.shape[1])
     else:
@@ -59,7 +58,7 @@ def lambda_handler(event, context):
         dt = first_entry.dtype
         centroid_shape = (num_clusters, first_entry.shape[1])
     parse_end = time.time()
-    logger.info(f"Parsing dataset takes {parse_end - s3_end}s")
+    #logger.info(f"Parsing dataset takes {parse_end - s3_end}s")
     logger.info(
         f"Dataset: {dataset_type}, dtype: {dt}. Centroids shape: {centroid_shape}. num_features: {num_features}")
 
@@ -97,10 +96,26 @@ def lambda_handler(event, context):
 
             if worker_index == 0 and success:
                 sync_start = time.time()
-                compute_average_centroids(avg_cent_bucket, worker_cent_bucket, num_worker, centroids.shape, epoch, dt)
+                compute_average_centroids(elastic_endpoint,avg_cent_bucket, worker_cent_bucket, num_worker, centroids.shape, epoch, dt)
                 logger.info(f"Waiting for all workers takes {time.time() - sync_start} s")
 
         else:
             logger.info(f"{worker_index}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
             logger.info(f"Whole process time : {time.time() - training_start}")
             return
+
+if __name__=="__main__":
+    import sys
+    sys.path.append('/Users/liuyue/LambdaML')
+
+    import json
+    payload = dict()
+    payload['num_features'] = 128
+    payload['num_clusters'] = 1
+    payload['worker_cent_bucket'] = "tmp-updates"
+    payload['avg_cent_bucket'] = "model"
+    payload['num_epochs'] = 1
+    payload["threshold"] = 1
+    payload["dataset_type"] = "dense"
+    payload["elasticache"] = "test.fifamc.cfg.euc1.cache.amazonaws.com"
+    lambda_handler(payload,None)
