@@ -157,9 +157,13 @@ def partition_agaricus(batch_size, train_file, test_file):
 
 def partition_sparse(file, num_feature):
     train_dataset = SparseLibsvmDataset(file, num_feature)
-    size = dist.get_world_size()
+    size = 1
+    rank = 0
+    if dist_is_initialized():
+        size = dist.get_world_size()
+        rank = dist.get_rank()
     train_partition_sizes = [1.0 / size for _ in range(size)]
     train_partition = DataPartitioner(train_dataset, train_partition_sizes)
-    train_partition = train_partition.use(dist.get_rank())
+    train_partition = train_partition.use(rank)
     return train_partition
 
