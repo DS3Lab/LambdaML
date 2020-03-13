@@ -152,7 +152,7 @@ class LogisticRegression(object):
             # print("z= {}, h= {}, loss = {}".format(z, h, loss))
             test_loss.update(loss, 1)
             test_acc.update(h, label)
-        print(f"test set: {self.num_test}, {test_loss}, {test_acc}")
+        #print(f"test set: {self.num_test}, {test_loss}, {test_acc}")
         return test_loss, test_acc
 
 

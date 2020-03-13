@@ -68,7 +68,7 @@ def run(args):
             end_compute = time.time()
             logging.info(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
             centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), error)
-            logging.info(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s")
+            logging.info(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s. local error:{error}, avg error: {avg_error}")
         else:
             logging.info(f"{args.rank}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
             logging.info(f"Whole process time : {time.time() - training_start}")
@@ -105,7 +105,7 @@ def main():
         help='URL specifying how to initialize the package.')
     parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
-    parser.add_argument('--epochs', type=int, default=2)
+    parser.add_argument('--epochs', type=int, default=7)
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('-k', '--num-clusters', type=int, default=5)
     parser.add_argument('--train-file', type=str, default='data')
