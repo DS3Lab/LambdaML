@@ -169,7 +169,7 @@ def handler(event, context):
 
     net = net.to(device)
 
-    optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9)
+    optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=5e-4)
 
 
     # Loss and Optimizer
