@@ -6,7 +6,7 @@ import numpy as np
 from elasticache.Memcached.list_keys import hlist_keys
 from elasticache.Memcached.get_object import hget_object,hget_object_or_wait
 from elasticache.Memcached.set_object import hset_object
-from elasticache.Memcached.delete_keys import hdelete_keys,hdelete_key
+from elasticache.Memcached.delete_keys import hdelete_keys
 from elasticache.Memcached.clear_all import clear_all
 
 
