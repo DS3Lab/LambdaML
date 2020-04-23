@@ -19,7 +19,7 @@ class SparseLibsvmDataset(Dataset):
             if ins is not None:
                 self.ins_list.append(ins[0])
                 self.label_list.append(ins[1])
-        print(f"nr entries: {len(self.ins_list)}")
+        print(f"number of instances: {len(self.ins_list)}")
 
     def parse_line(self, line):
         splits = line.split()

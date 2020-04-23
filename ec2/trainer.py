@@ -47,6 +47,8 @@ class Accuracy(object):
         self.count += output.size(0)
 
 
+
+
 class Trainer(object):
 
     def __init__(self, model, optimizer, train_loader, test_loader, device=torch.device("cpu")):

@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from data_loader.YFCCLibsvmDataset import DenseLibsvmDataset
 from data_loader.LibsvmDataset import SparseLibsvmDataset
 
 from random import Random
@@ -137,6 +138,48 @@ def partition_higgs(batch_size, file_name, validation_ratio):
 
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
     return train_loader, batch_size, test_loader
+
+
+def partition_yfcc100m(file_list, n_features, pos_tag, batch_size, validation_ratio):
+    parse_start = time.time()
+    f = open(file_list[0]).readlines()
+    dataset = DenseLibsvmDataset(f, n_features, pos_tag)
+    if len(file_list) > 1:
+        for file_name in file_list[1:]:
+            f = open(file_name).readlines()
+            dataset.add_more(f)
+
+    total_count = dataset.__len__()
+    pos_count = 0
+    for i in range(total_count):
+        if dataset.__getitem__(i)[1] == 1:
+            pos_count += 1
+    print("{} positive observations out of {}".format(pos_count, total_count))
+
+    print("parse data cost {} s".format(time.time() - parse_start))
+
+    preprocess_start = time.time()
+    dataset_size = len(dataset)
+    indices = list(range(dataset_size))
+    split = int(np.floor(validation_ratio * dataset_size))
+    random_seed = 42
+    np.random.seed(random_seed)
+    np.random.shuffle(indices)
+    train_indices, val_indices = indices[split:], indices[:split]
+
+    # Creating PT data samplers and loaders:
+    train_sampler = SubsetRandomSampler(train_indices)
+    valid_sampler = SubsetRandomSampler(val_indices)
+
+    train_loader = torch.utils.data.DataLoader(dataset,
+                                               batch_size=batch_size,
+                                               sampler=train_sampler)
+    test_loader = torch.utils.data.DataLoader(dataset,
+                                              batch_size=batch_size,
+                                              sampler=valid_sampler)
+
+    print("preprocess data cost {} s".format(time.time() - preprocess_start))
+    return train_loader, test_loader
 
 
 def partition_agaricus(batch_size, train_file, test_file):

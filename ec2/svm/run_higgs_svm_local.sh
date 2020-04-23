@@ -1,6 +1,6 @@
 #!/bin/bash
 # 16 thread on one machine
-# ./run_svm_higgs_local.sh 16 6250 0.01 100 172.31.41.172:24000
+# ./run_higgs_svm_local.sh 16 6250 0.01 100 172.31.41.172:24000
 # one thread on one machine
 # nohup python -u higgs_svm_grad_avg.py --init-method tcp://127.0.0.1:24000 --world-size 1 --rank 0 --root /home/ubuntu/dataset/higgs --no-cuda --batch-size 100000 --learning-rate 0.01 --epochs 10 > logs/0_1.log 2>&1 &
 

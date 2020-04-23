@@ -10,18 +10,14 @@ from s3.clear_bucket import clear_bucket
 from sync.sync_reduce import reduce_epoch, delete_expired_merged_epoch
 
 from model.SVM import SVM
-from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from data_loader.YFCCLibsvmDataset import DenseLibsvmDataset
+
 
 # lambda setting
 local_dir = "/tmp"
 
 # algorithm setting
-num_features = 30
-num_classes = 2
-learning_rate = 0.01
-batch_size = 1000
-num_epochs = 2
-validation_ratio = .2
+validation_ratio = .1
 shuffle_dataset = True
 random_seed = 42
 
@@ -31,34 +27,51 @@ def handler(event, context):
     bucket = event['bucket_name']
     worker_index = event['rank']
     num_workers = event['num_workers']
-    key = event['file']
+    key = event['file'].split(",")
     tmp_bucket = event['tmp_bucket']
     merged_bucket = event['merged_bucket']
+    num_classes = event['num_classes']
+    num_features = event['num_features']
+    pos_tag = event['pos_tag']
     num_epochs = event['num_epochs']
     learning_rate = event['learning_rate']
     batch_size = event['batch_size']
 
     print('bucket = {}'.format(bucket))
     print("file = {}".format(key))
-    print('tmp bucket = {}'.format(tmp_bucket))
-    print('merged bucket = {}'.format(merged_bucket))
     print('number of workers = {}'.format(num_workers))
     print('worker index = {}'.format(worker_index))
+    print('tmp bucket = {}'.format(tmp_bucket))
+    print('merge bucket = {}'.format(merged_bucket))
     print('num epochs = {}'.format(num_epochs))
+    print('num classes = {}'.format(num_classes))
+    print('num features = {}'.format(num_features))
+    print('positive tag = {}'.format(pos_tag))
     print('learning rate = {}'.format(learning_rate))
-    print("batch size = {}".format(batch_size))
+    print("batch_size = {}".format(batch_size))
 
     # read file from s3
-    file = get_object(bucket, key).read().decode('utf-8').split("\n")
+    file = get_object(bucket, key[0]).read().decode('utf-8').split("\n")
+    dataset = DenseLibsvmDataset(file, num_features, pos_tag)
+    if len(key) > 1:
+        for more_key in key[1:]:
+            file = get_object(bucket, more_key).read().decode('utf-8').split("\n")
+            dataset.add_more(file)
     print("read data cost {} s".format(time.time() - start_time))
 
     parse_start = time.time()
-    dataset = DenseLibsvmDataset2(file, num_features)
+    total_count = dataset.__len__()
+    pos_count = 0
+    for i in range(total_count):
+        if dataset.__getitem__(i)[1] == 1:
+            pos_count += 1
+    print("{} positive observations out of {}".format(pos_count, total_count))
     print("parse data cost {} s".format(time.time() - parse_start))
 
     preprocess_start = time.time()
     # Creating data indices for training and validation splits:
     dataset_size = len(dataset)
+
     indices = list(range(dataset_size))
     split = int(np.floor(validation_ratio * dataset_size))
     if shuffle_dataset:
@@ -93,26 +106,36 @@ def handler(event, context):
         epoch_start = time.time()
         epoch_loss = 0
         for batch_index, (items, labels) in enumerate(train_loader):
-            # print("------worker {} epoch {} batch {}------".format(worker_index, epoch, batch_index))
             batch_start = time.time()
-            #items = Variable(items.view(-1, num_features))
-            #labels = Variable(labels)
-
-            items = items.to(torch.device("cpu"))
-            labels = labels.to(torch.device("cpu")).float()
+            items = Variable(items.view(-1, num_features))
+            labels = Variable(labels).float()
 
             # Forward + Backward + Optimize
+            optimizer.zero_grad()
             outputs = model(items)
-            print("outputs type = {}".format(outputs.type()))
-            print("labels type = {}".format(labels.type()))
             loss = torch.mean(torch.clamp(1 - outputs.t() * labels, min=0))  # hinge loss
             loss += 0.01 * torch.mean(model.linear.weight ** 2) / 2.0  # l2 penalty
             epoch_loss += loss
-
-            optimizer.zero_grad()
             loss.backward()
 
             optimizer.step()
+
+        w = model.linear.weight.data.numpy()
+        w_shape = w.shape
+        b = model.linear.bias.data.numpy()
+        b_shape = b.shape
+        w_and_b = np.concatenate((w.flatten(), b.flatten()))
+        cal_time = time.time() - epoch_start
+
+        sync_start = time.time()
+        postfix = "{}".format(epoch)
+        u_w_b_merge = reduce_epoch(w_and_b, tmp_bucket, merged_bucket, num_workers, worker_index, postfix)
+
+        w_mean = u_w_b_merge[: w_shape[0] * w_shape[1]].reshape(w_shape) / float(num_workers)
+        b_mean = u_w_b_merge[w_shape[0] * w_shape[1]:].reshape(b_shape[0]) / float(num_workers)
+        model.linear.weight.data = torch.from_numpy(w_mean)
+        model.linear.bias.data = torch.from_numpy(b_mean)
+        sync_time = time.time() - sync_start
 
         # Test the Model
         test_start = time.time()
@@ -124,72 +147,29 @@ def handler(event, context):
             labels = Variable(labels)
             outputs = model(items)
             test_loss = torch.mean(torch.clamp(1 - outputs.t() * labels.float(), min=0))  # hinge loss
-            test_loss += 0.01 * torch.mean(model.linear.weight ** 2) / 2.0  # l2 penalty
-
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum()
         test_time = time.time() - test_start
 
-        print('Epoch: [%d/%d], Step: [%d/%d], Time: %.4f, Loss: %.4f, epoch cost %.4f, '
-              'batch cost %.4f s: test cost %.4f s, '
+        print('Epoch: [%d/%d] has %d batches, Time: %.4f, Loss: %.4f, '
+              'epoch cost %.4f: computation cost %.4f s communication cost %.4f s test cost %.4f s, '
               'accuracy of the model on the %d test samples: %d %%, loss = %f'
-              % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size,
-                 time.time() - train_start, epoch_loss.data, time.time() - epoch_start,
-                 time.time() - batch_start, test_time,
+              % (epoch + 1, num_epochs, batch_index, time.time() - train_start, epoch_loss.data,
+                 time.time() - epoch_start, cal_time, sync_time, test_time,
                  len(val_indices), 100 * correct / total, test_loss / total))
-
-        w = model.linear.weight.data.numpy()
-        w_shape = w.shape
-        b = model.linear.bias.data.numpy()
-        b_shape = b.shape
-        w_and_b = np.concatenate((w.flatten(), b.flatten()))
-        cal_time = time.time() - epoch_start
-        print("Epoch {} calculation cost = {} s".format(epoch, cal_time))
-
-        sync_start = time.time()
-        postfix = "{}".format(epoch)
-        u_w_b_merge = reduce_epoch(w_and_b, tmp_bucket, merged_bucket, num_workers, worker_index, postfix)
-
-        w_mean = u_w_b_merge[: w_shape[0] * w_shape[1]].reshape(w_shape) / float(num_workers)
-        b_mean = u_w_b_merge[w_shape[0] * w_shape[1]:].reshape(b_shape[0]) / float(num_workers)
-        model.linear.weight.data = torch.from_numpy(w_mean)
-        model.linear.bias.data = torch.from_numpy(b_mean)
-        sync_time = time.time() - sync_start
-        print("Epoch {} synchronization cost {} s".format(epoch, sync_time))
 
         if worker_index == 0:
             delete_expired_merged_epoch(merged_bucket, epoch)
-        #
-        #
-        # #file_postfix = "{}_{}".format(epoch, worker_index)
-        # if epoch < num_epochs - 1:
-        #     if worker_index == 0:
-        #         w_merge, b_merge = merge_w_b(model_bucket, num_workers, w.dtype,
-        #                                      w.shape, b.shape, tmp_w_prefix, tmp_b_prefix)
-        #         put_merged_w_b(model_bucket, w_merge, b_merge,
-        #                        str(epoch), w_prefix, b_prefix)
-        #         delete_expired_w_b_by_epoch(model_bucket, epoch, tmp_w_prefix, tmp_b_prefix)
-        #         model.linear.weight.data = torch.from_numpy(w_merge)
-        #         model.linear.bias.data = torch.from_numpy(b_merge)
-        #     else:
-        #         w_merge, b_merge = get_merged_w_b(model_bucket, str(epoch), w.dtype,
-        #                                           w.shape, b.shape, w_prefix, b_prefix)
-        #         model.linear.weight.data = torch.from_numpy(w_merge)
-        #         model.linear.bias.data = torch.from_numpy(b_merge)
-
-        #print("weight after sync = {}".format(model.linear.weight.data.numpy()[0][:5]))
-        #print("bias after sync = {}".format(model.linear.bias.data.numpy()))
-
-        # print("epoch {} synchronization cost {} s".format(epoch, time.time() - sync_start))
 
     # Test the Model
     correct = 0
     total = 0
     for items, labels in validation_loader:
         items = Variable(items.view(-1, num_features))
-        # items = Variable(items)
+        labels = Variable(labels)
         outputs = model(items)
+        test_loss = torch.mean(torch.clamp(1 - outputs.t() * labels.float(), min=0))  # hinge loss
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum()

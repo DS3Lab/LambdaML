@@ -54,7 +54,7 @@ class SparseKmeans(object):
     def __init__(self, _data, _centroids, _nr_feature, _nr_cluster, _error=np.iinfo(np.int16).max):
         self.data = _data
         self.nr_feature = _nr_feature
-        self.centroids = [torch.tensor(c).reshape(1, _nr_feature).to_sparse() for c in _centroids]
+        self.centroids = [c.clone().detach().reshape(1, _nr_feature).to_sparse() for c in _centroids]
         self.nr_cluster = _nr_cluster
         self.error = _error
         self.model = torch.zeros(self.nr_feature, 1)

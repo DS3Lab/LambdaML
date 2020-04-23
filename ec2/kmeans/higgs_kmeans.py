@@ -6,13 +6,20 @@ import torch
 import torch.distributed as dist
 import numpy as np
 import logging
-import torch.optim as optim
 
 sys.path.append("../../")
 
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
 from torch.multiprocessing import Process
 from model.Kmeans import Kmeans
+
+
+def dist_is_initialized():
+    if dist.is_available():
+        if dist.is_initialized():
+            return True
+    return False
+
 
 def broadcast_average(args, centroid_tensor, error_tensor):
     if args.communication == "all-reduce":
@@ -41,7 +48,8 @@ def run(args):
     avg_error = np.iinfo(np.int16).max
     logging.info(f"{args.rank}-th worker starts.")
 
-    train_file = open(args.train_file, 'r').readlines()
+    file_name = "{}/{}_{}".format(args.root, args.rank, args.world_size)
+    train_file = open(file_name, 'r').readlines()
 
     train_set = DenseLibsvmDataset2(train_file, args.features).ins_np
     dt = train_set.dtype
@@ -55,7 +63,9 @@ def run(args):
         centroids = torch.tensor(train_set[0:args.num_clusters])
     else:
         centroids = torch.empty(args.num_clusters, args.features)
-    dist.broadcast(centroids, 0)
+
+    if dist_is_initialized():
+        dist.broadcast(centroids, 0)
     logging.info(f"Receiving initial centroids costs {time.time() - init_cent_start}s")
 
     training_start = time.time()
@@ -65,9 +75,15 @@ def run(args):
             model = Kmeans(train_set, centroids, avg_error, centroid_type='tensor')
             model.find_nearest_cluster()
             end_compute = time.time()
-            logging.info(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
-            centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), torch.tensor(model.error))
-            logging.info(f"{args.rank}-th worker finished communicating the result. Takes {time.time() - end_compute}s. Loss: {model.error}")
+            #logging.info(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
+            sync_start = time.time()
+            if dist_is_initialized():
+                centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), torch.tensor(model.error))
+            logging.info(f"{args.rank}-th worker finished {epoch} epoch. "
+                         f"Computing takes {end_compute - start_compute}s."
+                         f"Communicating takes {time.time() - sync_start}s. "
+                         #f"Centroids: {model.get_centroids('dense_tensor')}. " 
+                         f"Loss: {model.error}")
         else:
             logging.info(f"{args.rank}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
             logging.info(f"Whole process time : {time.time() - training_start}")
@@ -107,20 +123,19 @@ def main():
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('-k', '--num-clusters', type=int, default=10)
+    parser.add_argument('--root', type=str, default='data')
     parser.add_argument('--train-file', type=str, default='data')
     parser.add_argument('--threshold', type=float, default=0.0002)
     parser.add_argument('--features', type=int, default=28)
     parser.add_argument('--communication', type=str, default='all-reduce')
     args = parser.parse_args()
-    logging.basicConfig(filename=f"/home/ubuntu/log/higgs_kmeans_r{args.rank}_w{args.world_size}_k{args.num_clusters}", filemode='a', level=logging.DEBUG, format='%(name)s - %(levelname)s - %(message)s')
-    logging.info(args)
+    print(args)
+    #logging.basicConfig(filename=f"~/logs/higgs_kmeans_r{args.rank}_w{args.world_size}_k{args.num_clusters}", filemode='a', level=logging.DEBUG, format='%(name)s - %(levelname)s - %(message)s')
+    #logging.info(args)
 
-    dist.init_process_group(
-        backend=args.backend,
-        init_method=args.init_method,
-        world_size=args.world_size,
-        rank=args.rank,
-    )
+    if args.world_size > 1:
+        dist.init_process_group(backend=args.backend, init_method=args.init_method, world_size=args.world_size, rank=args.rank)
+
     run(args)
 
 

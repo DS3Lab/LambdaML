@@ -2,22 +2,17 @@ import argparse
 
 import os
 import sys
+import time
+
 import torch
 import torch.distributed as dist
-import torch.optim as optim
 
-from math import ceil
 from torch.multiprocessing import Process
 
 sys.path.append("../")
 sys.path.append("../../")
 
-from ec2.trainer import Trainer
-from ec2.data_partition import partition_higgs
-from pytorch_model.higgs import LogisticRegression
-
-
-validation_ratio = .1
+SLEEP_INTERVAL = 10
 
 
 def dist_is_initialized():
@@ -27,22 +22,25 @@ def dist_is_initialized():
     return False
 
 
+def reduce_data(t):
+    size = float(dist.get_world_size())
+    dist.all_reduce(t, op=dist.ReduceOp.SUM)
+    t /= size
+
+
 def run(args):
     """ Distributed Synchronous SGD Example """
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
     torch.manual_seed(1234)
 
-    file_name = "{}/{}_{}".format(args.root, args.rank, args.world_size)
-    print("read file {}".format(file_name))
-    train_loader, bsz, test_loader = partition_higgs(args.batch_size, file_name, validation_ratio)
-    num_batches = ceil(len(train_loader.dataset) / float(bsz))
-
-    model = LogisticRegression()
-    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate)
-
-    trainer = Trainer(model, optimizer, train_loader, test_loader, device)
-
-    trainer.fit(args.epochs, is_dist=dist_is_initialized())
+    for epoch in range(args.epochs):
+        epoch_start = time.time()
+        time.sleep(SLEEP_INTERVAL)
+        t = torch.rand(1, args.data_size)
+        sync_start = time.time()
+        if dist_is_initialized():
+            reduce_data(t)
+        print("Epoch {} cost {} s, sync cost {} s".format(epoch, time.time()-epoch_start, time.time()-sync_start))
 
 
 def init_processes(rank, size, fn, backend='gloo'):
@@ -78,10 +76,7 @@ def main():
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--no-cuda', action='store_true')
-    parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)
-    parser.add_argument('--root', type=str, default='data')
-    parser.add_argument('--batch-size', type=int, default=128)
-    parser.add_argument('--features', type=int, default=47236)
+    parser.add_argument('--data-size', type=int, default=100)
     args = parser.parse_args()
     print(args)
 

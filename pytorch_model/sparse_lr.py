@@ -46,7 +46,7 @@ class Accuracy(object):
         return self.correct / self.count
 
     def update(self, output, target):
-        pred = 1 if output.item() >= 0 else -1
+        pred = 1 if output.item() >= 0.5 else 0
 
         self.correct += 1 if pred == target else 1
         self.count += 1
@@ -71,7 +71,7 @@ class LogisticRegression(object):
         start = batch_idx * self.batch_size
         end = min((batch_idx + 1) * self.batch_size, self.num_train)
         ins = [ts[0] for ts in self.train_set[start:end]]
-        label = [ts[1] for ts in self.train_set[start:end]]
+        label = [1 if ts[1] > 0 else 0 for ts in self.train_set[start:end]]
         return ins, label
 
     def get_batch(self):
@@ -93,7 +93,14 @@ class LogisticRegression(object):
         pred = pred.add(self.bias)
         return pred
 
+    def batch_forward(self, ins):
+        pred = [torch.sparse.mm(ins, self.grad) for i in ins]
+        return torch.tensor(pred)
+
     def sigmoid(self, z):
+        return 1 / (1 + np.exp(-z))
+
+    def batch_sigmoid(self, z):
         return 1 / (1 + np.exp(-z))
 
     def loss(self, h, y):

@@ -9,9 +9,13 @@ import logging
 
 sys.path.append("../../")
 
-from pytorch_model.sparse_kmeans import SparseKmeans
+from data_loader.YFCCLibsvmDataset import DenseLibsvmDataset
+
 from torch.multiprocessing import Process
-from data_loader.LibsvmDataset import SparseLibsvmDataset
+from model.Kmeans import Kmeans
+
+
+validation_ratio = .1
 
 
 def dist_is_initialized():
@@ -34,7 +38,7 @@ def broadcast_average(args, centroid_tensor, error_tensor):
             tensor_sum = torch.empty(args.num_clusters, args.features)
             for c in all_centroids_list:
                 tensor_sum += c
-            avg_cent = c/args.world_size
+            avg_cent = c / args.world_size
             dist.broadcast(avg_cent, 0)
         else:
             dist.send(centroid_tensor, 0)
@@ -44,22 +48,39 @@ def broadcast_average(args, centroid_tensor, error_tensor):
 def run(args):
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
     torch.manual_seed(1234)
-    read_start = time.time()
-    avg_error = np.iinfo(np.int16).max
+
     logging.info(f"{args.rank}-th worker starts.")
 
-    file_name = "{}/{}_{}".format(args.root, args.rank, args.world_size)
-    train_file = open(file_name, 'r').readlines()
+    read_start = time.time()
 
-    train_set = SparseLibsvmDataset(train_file, args.features)
-    train_set = [t[0] for t in train_set]
+    f_id_start = args.rank * args.num_files
+    f_id_end = f_id_start + args.num_files
+    f_path_list = ["{}/{}".format(args.root, i) for i in range(f_id_start, f_id_end)]
+    f = open(f_path_list[0]).readlines()
+    dataset = DenseLibsvmDataset(f, args.features, args.pos_tag)
+    if len(f_path_list) > 1:
+        for file_name in f_path_list[1:]:
+            f = open(file_name).readlines()
+            dataset.add_more(f)
+
+    total_count = dataset.__len__()
+    pos_count = 0
+    for i in range(total_count):
+        if dataset.__getitem__(i)[1] == 1:
+            pos_count += 1
+    print("{} positive observations out of {}".format(pos_count, total_count))
+
+    train_set = np.array(dataset.ins_list)
+
+    dt = train_set.dtype
+    centroid_shape = (args.num_clusters, train_set.shape[1])
     logging.info(f"Loading dataset costs {time.time() - read_start}s")
+    logging.info(f"centorid shape: {centroid_shape}")
 
     # initialize centroids
     init_cent_start = time.time()
     if args.rank == 0:
-        c_dense_list = [t.to_dense() for t in train_set[:args.num_clusters]]
-        centroids = torch.stack(c_dense_list).reshape(args.num_clusters, args.features)
+        centroids = torch.tensor(train_set[0:args.num_clusters])
     else:
         centroids = torch.empty(args.num_clusters, args.features)
 
@@ -68,21 +89,21 @@ def run(args):
     logging.info(f"Receiving initial centroids costs {time.time() - init_cent_start}s")
 
     training_start = time.time()
+    avg_error = np.iinfo(np.int16).max
     for epoch in range(args.epochs):
         if avg_error >= args.threshold:
             start_compute = time.time()
-            model = SparseKmeans(train_set, centroids, args.features, args.num_clusters)
+            model = Kmeans(train_set, centroids, avg_error, centroid_type='tensor')
             model.find_nearest_cluster()
-            error = torch.tensor(model.error)
             end_compute = time.time()
-            logging.info(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
+            #logging.info(f"{args.rank}-th worker computing centroids takes {end_compute - start_compute}s")
             sync_start = time.time()
             if dist_is_initialized():
-                centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), error)
+                centroids, avg_error = broadcast_average(args, model.get_centroids("dense_tensor"), torch.tensor(model.error))
             logging.info(f"{args.rank}-th worker finished {epoch} epoch. "
-                         f"Computing takes {end_compute - start_compute}s. "
+                         f"Computing takes {end_compute - start_compute}s."
                          f"Communicating takes {time.time() - sync_start}s. "
-                         # f"Centroids: {model.get_centroids('dense_tensor')}. " 
+                         #f"Centroids: {model.get_centroids('dense_tensor')}. " 
                          f"Loss: {model.error}")
         else:
             logging.info(f"{args.rank}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
@@ -120,17 +141,18 @@ def main():
         help='URL specifying how to initialize the package.')
     parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
-    parser.add_argument('--epochs', type=int, default=2)
-    parser.add_argument('--no-cuda', action='store_true')
-    parser.add_argument('-k', '--num-clusters', type=int, default=5)
+    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--features', type=int, default=28)
+    parser.add_argument('-k', '--num-clusters', type=int, default=10)
     parser.add_argument('--root', type=str, default='data')
-    parser.add_argument('--train-file', type=str, default='data')
-    parser.add_argument('--threshold', type=float, default=0.02)
-    parser.add_argument('--features', type=int, default=47236)
+    parser.add_argument('--num-files', type=int, default=1)
+    parser.add_argument('--pos-tag', type=str, default="animal")
+    parser.add_argument('--no-cuda', action='store_true')
+    parser.add_argument('--threshold', type=float, default=0.0002)
     parser.add_argument('--communication', type=str, default='all-reduce')
     args = parser.parse_args()
     print(args)
-    #logging.basicConfig(filename=f"/home/ubuntu/log/rcv_kmeans_r{args.rank}_w{args.world_size}_k{args.num_clusters}", filemode='a', level=logging.DEBUG, format='%(name)s - %(levelname)s - %(message)s')
+    #logging.basicConfig(filename=f"~/logs/higgs_kmeans_r{args.rank}_w{args.world_size}_k{args.num_clusters}", filemode='a', level=logging.DEBUG, format='%(name)s - %(levelname)s - %(message)s')
     #logging.info(args)
 
     if args.world_size > 1:
