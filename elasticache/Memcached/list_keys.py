@@ -2,7 +2,7 @@ import logging
 import memcache
 from botocore.exceptions import ClientError
 
-    
+
 
 
 def hlist_keys(client, keys):

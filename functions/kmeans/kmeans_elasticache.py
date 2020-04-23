@@ -104,4 +104,3 @@ def lambda_handler(event, context):
             logger.info(f"{worker_index}-th worker finished training. Error = {avg_error}, centroids = {centroids}")
             logger.info(f"Whole process time : {time.time() - training_start}")
             return
-

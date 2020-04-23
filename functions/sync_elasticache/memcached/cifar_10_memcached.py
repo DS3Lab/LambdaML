@@ -14,12 +14,12 @@ from s3.download_file import download_file
 from s3.put_object import put_object
 
 
-from sync.sync_grad_memcache import *
+from sync.sync_grad_memcached import *
 from sync.sync_meta import SyncMeta
 
-from elasticache.Memcache.__init__ import memcache_init
-from elasticache.Memcache.get_object import hget_object
-from elasticache.Memcache.set_object import hset_object
+from elasticache.Memcached.__init__ import memcached_init
+from elasticache.Memcached.get_object import hget_object
+from elasticache.Memcached.set_object import hset_object
 
 
 from s3.put_object import put_object
@@ -56,10 +56,10 @@ def handler(event, context):
     bucket = event['data_bucket']
     worker_index = event['rank']
     elasti_location = event['elasticache']
-    endpoint = memcache_init(elasti_location)
+    endpoint = memcached_init(elasti_location)
     #endpoint = elasti_location
     #worker_index = 0
-    num_worker = event['num_workers']  
+    num_worker = event['num_workers']
     #num_worker = 10
     key = 'training_{}.pt'.format(worker_index)
     print('data_bucket = {}\n worker_index:{}\n num_worker:{}\n key:{}'.format(bucket, worker_index, num_worker, key))
@@ -69,18 +69,18 @@ def handler(event, context):
 
     # read file from s3
     readS3_start = time.time()
- 
-    
+
+
     train_path = download_file(bucket, key)
     test_path = download_file(bucket, test_file)
     trainset = torch.load(train_path)
     testset= torch.load(test_path)
     print("read data cost {} s".format(time.time() - readS3_start))
-    #print(trainset) 
+    #print(trainset)
     batch_size = 200
     batch_size = int(np.ceil(batch_size/num_worker))
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
-   
+
     testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False)
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
     device = 'cpu'
@@ -102,21 +102,21 @@ def handler(event, context):
     # net = SENet18()
     # net = ShuffleNetV2(1)
     # net = EfficientNetB0()
-    
+
     print("Model: MobileNet")
 
     net = net.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=5e-4)
-    
+
     for epoch in range(num_epochs):
         train(endpoint, epoch, net, trainloader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step)
         test(epoch, net, testloader, criterion, device)
-    
+
     put_object("time-record-s3","time_{}".format(worker_index),pickle.dumps(time_record))
 # Training
 def train(endpoint, epoch, net, trainloader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step):
-    
+
     # print('\nEpoch: %d' % epoch)
     net.train()
     # train_loss = 0
@@ -125,7 +125,7 @@ def train(endpoint, epoch, net, trainloader, optimizer, criterion, device, worke
     end = 0
     batch_start = time.time()
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-        
+
         print("------worker {} epoch {} batch {}------".format(worker_index, epoch+1, batch_idx+1))
 
         inputs, targets = inputs.to(device), targets.to(device)
@@ -133,66 +133,66 @@ def train(endpoint, epoch, net, trainloader, optimizer, criterion, device, worke
         outputs = net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
-       
-  
- 
 
-                    
+
+
+
+
         if sync_mode == 'grad_avg':
-            
+
             sync_start = time.time()
-            
+
             gradients = [param.grad.data.numpy() for param in net.parameters()]
             # print("[Worker {}] Gradients before sync = {}".format(worker_index, gradients[0][0]))
-            
-            
+
+
             put_object_start = time.time()
             sync_start = time.time()
             print(hset_object(endpoint, tmp_bucket, gradients_prefix + str(worker_index), pickle.dumps(gradients)))
-            
+
             tmp_write_local_epoch_time = time.time()-put_object_start
             print("writing local gradients in elasticache cost {}".format(tmp_write_local_epoch_time))
-        
-            
+
+
             file_postfix = "{}_{}".format(epoch, batch_idx)
             if worker_index == 0:
                 # merge all workers
-                
-                
-                
+
+
+
                 merged_value = \
                     merge_w_b_layers(endpoint, tmp_bucket, num_worker, gradients_prefix)
-   
+
                 # upload merged value to elasticache
                 put_merged_w_b_layers(endpoint, merged_bucket, merged_value,
                                     gradients_prefix, file_postfix)
-                                    
+
                 #if batch_idx > end:
                 #    end = end+1
                 #delete_expired_w_b_layers(endpoint, merged_bucket, epoch, batch_idx, gradients_prefix,end)
-                
+
             else:
-                
-                
+
+
                 # get merged value from redis
                 merged_value = get_merged_w_b_layers(endpoint, merged_bucket, gradients_prefix, file_postfix)
-                
-              
-                
+
+
+
             for layer_index, param in enumerate(net.parameters()):
                 param.grad = Variable(torch.from_numpy(merged_value[layer_index]))
-                
-            
-                
+
+
+
         tmp_sync_time = time.time() - sync_start
         print("synchronization cost {} s".format(tmp_sync_time))
-                
-                
+
+
         optimizer.step()
-           
-    
+
+
         print("batch cost = {}".format(time.time()-batch_start))
-        batch_start = time.time()    
+        batch_start = time.time()
         # train_loss += loss.item()
         # _, predicted = outputs.max(1)
         # total += targets.size(0)
@@ -226,4 +226,3 @@ def test(epoch, net, testloader, criterion, device):
     # Save checkpoint.
     acc = 100.*correct/total
     print("Accuracy of epoch {} on test set is {}".format(epoch, acc))
-

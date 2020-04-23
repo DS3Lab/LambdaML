@@ -13,7 +13,7 @@ import logging
 import memcache
 from botocore.exceptions import ClientError
 
-def memcache_init(endpoint):
+def memcached_init(endpoint):
     port = 11211
     try:
         endpoint = endpoint+":"+str(port)
@@ -23,4 +23,3 @@ def memcache_init(endpoint):
         logging.error(e)
         return False
     return client
-

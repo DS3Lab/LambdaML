@@ -116,7 +116,7 @@ def main():
         '-i',
         '--init-method',
         type=str,
-        default='tcp://127.0.0.1:19226',
+        default='tcp://127.0.0.1:23456',
         help='URL specifying how to initialize the package.')
     parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')

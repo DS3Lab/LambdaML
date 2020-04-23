@@ -7,12 +7,12 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from elasticache.Memcache.set_object import hset_object
-from elasticache.Memcache.get_object import hget_object
-from elasticache.Memcache.__init__ import memcache_init
+from elasticache.Memcached.set_object import hset_object
+from elasticache.Memcached.get_object import hget_object
+from elasticache.Memcached.__init__ import memcached_init
 from s3.get_object import get_object
 from s3.put_object import put_object
-from sync.sync_grad_memcache import *
+from sync.sync_grad_memcached import *
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
@@ -46,7 +46,7 @@ def handler(event, context):
     num_features = event['num_features']
     num_classes = event['num_classes']
     elasti_location = event['elasticache']
-    endpoint = memcache_init(elasti_location)
+    endpoint = memcached_init(elasti_location)
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
 
@@ -57,7 +57,7 @@ def handler(event, context):
 
     batch_size = 100000
     batch_size = int(np.ceil(batch_size/num_worker))
-    
+
     torch.manual_seed(random_seed)
 
     sync_meta = SyncMeta(worker_index, num_worker)
@@ -192,5 +192,3 @@ def handler(event, context):
     print("elapsed time = {} s".format(endTs - startTs))
     loss_record = [test_loss,test_acc,train_loss,epoch_time]
     put_object("model-average-loss","average_loss{}".format(worker_index),pickle.dumps(loss_record))
-    
-        
