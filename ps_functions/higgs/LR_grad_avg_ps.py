@@ -20,8 +20,6 @@ from thrift.transport import TSocket
 from thrift.transport import TTransport
 from thrift.protocol import TBinaryProtocol
 
-from thrift_ps import constants
-
 
 # algorithm setting
 NUM_FEATURES = 30
@@ -40,15 +38,19 @@ def handler(event, context):
     worker_index = event['rank']
     num_workers = event['num_workers']
     key = event['file']
+    host = event['host']
+    port = event['port']
 
     print('bucket = {}'.format(bucket))
     print('number of workers = {}'.format(num_workers))
     print('worker index = {}'.format(worker_index))
     print("file = {}".format(key))
+    print("host = {}".format(host))
+    print("port = {}".format(port))
 
     # Set thrift connection
     # Make socket
-    transport = TSocket.TSocket(constants.HOST, constants.PORT)
+    transport = TSocket.TSocket(host, port)
     # Buffering is critical. Raw sockets are very slow
     transport = TTransport.TBufferedTransport(transport)
     # Wrap in a protocol
@@ -60,8 +62,7 @@ def handler(event, context):
 
     # test thrift connection
     ps_client.ping(t_client)
-    print("create and ping thrift server >>> HOST = {}, PORT = {}"
-          .format(constants.HOST, constants.PORT))
+    print("create and ping thrift server >>> HOST = {}, PORT = {}".format(host, port))
 
     # read file from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")

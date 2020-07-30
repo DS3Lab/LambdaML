@@ -1,6 +1,6 @@
 #!/bin/bash
 # 10 thread on one machine
-# ./run_rcv_lr_local.sh 10 100 1000 0.01 47236 127.0.0.1:24000 ~/dataset/rcv-1/
+# ./rcv_lr_grad_avg_local.sh 10 100 1000 0.01 47236 127.0.0.1:24000 ~/dataset/rcv-1/
 # one thread on one machine
 # nohup python -u rcv_lr_grad_avg.py --init-method tcp://127.0.0.1:24000 --rank 0 --world-size 1 --epochs 100 -lr 0.01 --batch-size 10000 --features 47236 --root ~/dataset/rcv-1/ --no-cuda > rcv1_lr_grad_avg_w1_lr.01_b10k.log 2>&1 &
 

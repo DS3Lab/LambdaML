@@ -25,15 +25,19 @@ def handler(event, context):
     worker_index = event['rank']
     num_workers = event['num_workers']
     key = event['file']
+    host = event['host']
+    port = event['port']
 
     print('bucket = {}'.format(bucket))
     print('number of workers = {}'.format(num_workers))
     print('worker index = {}'.format(worker_index))
     print("file = {}".format(key))
+    print("host = {}".format(host))
+    print("port = {}".format(port))
 
     # Set thrift connection
     # Make socket
-    transport = TSocket.TSocket(constants.HOST, constants.PORT)
+    transport = TSocket.TSocket(host, port)
     # Buffering is critical. Raw sockets are very slow
     transport = TTransport.TBufferedTransport(transport)
     # Wrap in a protocol
@@ -45,8 +49,7 @@ def handler(event, context):
 
     # test thrift connection
     ps_client.ping(t_client)
-    print("create and ping thrift server >>> HOST = {}, PORT = {}"
-          .format(constants.HOST, constants.PORT))
+    print("create and ping thrift server >>> HOST = {}, PORT = {}".format(host, port))
 
     # register model
     ps_client.register_model(t_client, worker_index, MODEL_NAME, MODEL_LENGTH, num_workers)
@@ -67,23 +70,25 @@ def handler(event, context):
 
             # pull latest model
             ps_client.can_pull(t_client, MODEL_NAME, iter_counter, worker_index)
+            pull_start = time.time()
             latest_model = ps_client.pull_model(t_client, MODEL_NAME, iter_counter, worker_index)
+            pull_time = time.time() - pull_start
 
             w_b_grad = np.random.rand(1, MODEL_LENGTH).astype(np.double).flatten()
             cal_time = time.time() - batch_start
 
             # push gradient to PS
-            sync_start = time.time()
             ps_client.can_push(t_client, MODEL_NAME, iter_counter, worker_index)
+            push_start = time.time()
             ps_client.push_grad(t_client, MODEL_NAME, w_b_grad, LEARNING_RATE, iter_counter, worker_index)
+            push_time = time.time() - push_start
             ps_client.can_pull(t_client, MODEL_NAME, iter_counter + 1, worker_index)  # sync all workers
-            sync_time = time.time() - sync_start
 
             print('Epoch: [%d/%d], Step: [%d/%d] >>> Time: %.4f, Loss: %.4f, epoch cost %.4f, '
-                  'batch cost %.4f s: cal cost %.4f s and communication cost %.4f s'
+                  'batch cost %.4f s: cal cost %.4f s, pull model cost %.4f s, push update cost %.4f s'
                   % (epoch + 1, NUM_EPOCHS, batch_index, NUM_BATCHES,
                      time.time() - train_start, loss, time.time() - epoch_start,
-                     time.time() - batch_start, cal_time, sync_time))
+                     time.time() - batch_start, cal_time, pull_time, push_time))
             iter_counter += 1
 
     end_time = time.time()

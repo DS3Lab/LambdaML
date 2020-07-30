@@ -6,12 +6,16 @@ def handler(event, context):
     dataset_name = 'higgs'
     bucket_name = "higgs-10"
     num_workers = 10
+    host = "172.31.14.3"
+    port = 27000
 
     # invoke functions
     payload = dict()
     payload['dataset'] = dataset_name
     payload['bucket_name'] = bucket_name
     payload['num_workers'] = num_workers
+    payload['host'] = host
+    payload['port'] = port
 
     # invoke functions
     lambda_client = boto3.client('lambda')

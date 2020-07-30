@@ -141,6 +141,33 @@ class DenseLibsvmDataset2(Dataset):
         return len(self.label_list)
 
 
+# input is numpy array
+class DenseLibsvmDataset3(Dataset):
+
+    def __init__(self,
+                 max_dim,
+                 features,
+                 labels):
+        self.max_dim = max_dim
+        self.ins_list = []
+        self.label_list = []
+        for i in range(features.shape[0]):
+            self.ins_list.append(self.to_tensor(features[i]))
+            self.label_list.append(labels[i])
+
+    def to_tensor(self, features):
+        vector = torch.from_numpy(features).float()
+        return vector
+
+    def __getitem__(self, index):
+        ins = self.ins_list[index]
+        label = self.label_list[index]
+        return ins, label
+
+    def __len__(self):
+        return len(self.label_list)
+
+
 def main():
     train_file = "../dataset/agaricus_127d_train.libsvm"
     test_file = "../dataset/agaricus_127d_test.libsvm"

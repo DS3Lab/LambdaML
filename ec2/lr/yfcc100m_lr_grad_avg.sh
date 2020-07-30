@@ -1,6 +1,6 @@
 #!/bin/bash
 # 10 machines
-# ./run_yfcc_lr.sh 10 20 4096 2 0.01 800 /bigdata/yfcc100m/ 4 animal 172.31.45.55:24000 t2.medium-10
+# ./yfcc100m_lr_grad_avg.sh 10 20 4096 2 0.01 800 /bigdata/yfcc100m/ 4 animal 172.31.45.55:24000 t2.medium-10
 
 world_size=$1
 epochs=$2

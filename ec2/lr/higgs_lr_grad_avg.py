@@ -34,8 +34,8 @@ def run(args):
 
     file_name = "{}/{}_{}".format(args.root, args.rank, args.world_size)
     print("read file {}".format(file_name))
-    train_loader, bsz, test_loader = partition_higgs(args.batch_size, file_name, validation_ratio)
-    num_batches = ceil(len(train_loader.dataset) / float(bsz))
+    train_loader, test_loader = partition_higgs(args.batch_size, file_name, validation_ratio)
+    num_batches = ceil(len(train_loader.dataset) / float(args.batch_size))
 
     model = LogisticRegression()
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate)
@@ -81,7 +81,7 @@ def main():
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)
     parser.add_argument('--root', type=str, default='data')
     parser.add_argument('--batch-size', type=int, default=128)
-    parser.add_argument('--features', type=int, default=47236)
+    parser.add_argument('--features', type=int, default=30)
     args = parser.parse_args()
     print(args)
 

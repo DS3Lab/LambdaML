@@ -4,7 +4,6 @@ import torch
 import torch.nn.functional as F
 from torch import distributed as dist
 import torch.nn
-#from utils.print_utils import progress_bar
 
 
 class Average(object):
@@ -45,8 +44,6 @@ class Accuracy(object):
 
         self.correct += correct
         self.count += output.size(0)
-
-
 
 
 class Trainer(object):
@@ -99,11 +96,9 @@ class Trainer(object):
             loss.backward()
 
             sync_start = time.time()
-
             if is_dist:
                 self.average_gradients()
             self.optimizer.step()
-
             sync_time = time.time() - sync_start
             total_sync_time += sync_time
             num_batch += 1
@@ -112,13 +107,6 @@ class Trainer(object):
             train_acc.update(output, target)
 
             batch_time = time.time() - batch_start
-
-            # print('Epoch: %d, Batch: %d, Time: %.4f s, Loss: %.4f, '
-            #       'batch cost %.4f s, comm cost %.4f s, comp cost %.4f s'
-            #       % (epoch, batch_idx, time.time() - self.train_start,
-            #          loss.data, batch_time, sync_time, batch_time - sync_time))
-
-            #progress_bar(batch_idx, len(self.train_loader), 'Loss: {} | Acc: {}'.format(train_loss, train_acc))
 
         epoch_time = time.time() - epoch_start
         print("Epoch {} has {} batches, time = {} s, epoch cost {} s, sync time = {} s, cal time = {} s"

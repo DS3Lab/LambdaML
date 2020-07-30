@@ -1,6 +1,6 @@
 #!/bin/bash
 # 10 machines
-# ./run_rcv_lr.sh 5 20 47240 2 0.1 2000 /bigdata/rcv1/ 172.31.41.242:24000 t2.medium-10
+# ./rcv_lr_grad_avg.sh 5 20 47240 2 0.1 2000 /bigdata/rcv1/ 172.31.41.242:24000 t2.medium-10
 
 world_size=$1
 epochs=$2

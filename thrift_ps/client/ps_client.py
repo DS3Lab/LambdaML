@@ -10,6 +10,8 @@ from thrift.protocol import TBinaryProtocol
 
 from thrift_ps import constants
 
+import argparse
+
 
 def ping(thrift_client):
     thrift_client.ping()
@@ -61,7 +63,7 @@ def push_update(thrift_client, mid, np_1d_arr, learning_rate, n_iter, worker_ind
     update = Update()
     update.id = mid
     update.data = np_1d_arr.tolist()
-    update.length = len(grad.data)
+    update.length = len(update.data)
     update.n_iter = n_iter
     update.worker_id = worker_index
     thrift_client.push_update(update)
@@ -72,11 +74,19 @@ MODEL_LENGTH = 10
 N_WORKER = 2
 
 
-def main(argv):
-    print("sys argv = {}".format(sys.argv))
-    worker_index = int(sys.argv[1])
+# python ps_client.py --rank 0 --host spaceml1 --port 27000
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--rank', type=int, default=0)
+    parser.add_argument('--host', type=str, default=constants.HOST)
+    parser.add_argument('--port', type=int, default=constants.PORT)
+    args = parser.parse_args()
+    print(args)
+
+    worker_index = args.rank
     # Make socket
-    transport = TSocket.TSocket(constants.HOST, constants.PORT)
+    transport = TSocket.TSocket(args.host, args.port)
     # Buffering is critical. Raw sockets are very slow
     transport = TTransport.TBufferedTransport(transport)
     # Wrap in a protocol
@@ -166,4 +176,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()

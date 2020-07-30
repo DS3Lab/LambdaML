@@ -1,6 +1,6 @@
 #!/bin/bash
 # 16 thread on one machine
-# ./run_higgs_lr_local.sh 16 100 6250 0.01 30 172.31.41.172:24000 ~/dataset/higgs/
+# ./higgs_lr_grad_avg_local.sh 16 100 6250 0.01 30 172.31.41.172:24000 ~/dataset/higgs/
 # one thread on one machine
 # nohup python -u higgs_lr_grad_avg.py --init-method tcp://127.0.0.1:24000 --world-size 1 --rank 0 --root /home/ubuntu/dataset/higgs --no-cuda --batch-size 100000 --learning-rate 0.01 --epochs 10 > logs/0_1.log 2>&1 &
 
