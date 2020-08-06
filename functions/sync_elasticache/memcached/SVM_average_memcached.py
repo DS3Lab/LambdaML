@@ -15,12 +15,11 @@ from sync.sync_grad_memcached import *
 from s3.get_object import get_object
 from s3.put_object import put_object
 
-
-from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss,BinaryClass
+from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss, BinaryClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
-from sync.sync_meta import SyncMeta
-# lambda setting
 
+
+# lambda setting
 grad_bucket = "higgs-grads"
 model_bucket = "higgs-updates"
 local_dir = "/tmp"
@@ -28,7 +27,6 @@ w_prefix = "w_"
 b_prefix = "b_"
 
 # algorithm setting
-
 learning_rate = 0.1
 batch_size = 100000
 num_epochs = 55
@@ -37,11 +35,8 @@ shuffle_dataset = True
 random_seed = 42
 
 
-
-
 def handler(event, context):
-
-    startTs = time.time()
+    start_time = time.time()
     bucket = event['bucket']
     key = event['name']
     num_features = event['num_features']
@@ -62,12 +57,9 @@ def handler(event, context):
 
     torch.manual_seed(random_seed)
 
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
-
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
-    print("read data cost {} s".format(time.time() - startTs))
+    print("read data cost {} s".format(time.time() - start_time))
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
@@ -95,7 +87,6 @@ def handler(event, context):
                                                     sampler=valid_sampler)
 
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
-
 
     model = DenseSVM(num_features, num_classes)
 
@@ -125,7 +116,6 @@ def handler(event, context):
             loss = criterion(outputs, labels)
             loss.backward()
 
-
             optimizer.step()
             if (batch_index + 1) % 1 == 0:
                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
@@ -152,14 +142,10 @@ def handler(event, context):
                                 grad_bucket, num_worker, w_model.dtype,
                                 w_model.shape, b_model.shape,
                                 w_prefix, b_prefix)
-
             put_merged_w_b_grads(endpoint,model_bucket,
                                 w_model_merge, b_model_merge, file_postfix,
                                 w_prefix, b_prefix)
-
-
         else:
-
             w_model_merge, b_model_merge = get_merged_w_b_grads(endpoint,model_bucket, file_postfix,
                                                                 w_model.dtype, w_model.shape, b_model.shape,
                                                                 w_prefix, b_prefix)
@@ -169,8 +155,8 @@ def handler(event, context):
 
         tmp_sync_time = time.time() - sync_start
         print("synchronization cost {} s".format(tmp_sync_time))
-	epoch_time = time.time()-epoch_start + epoch_time
 
+        epoch_time = time.time()-epoch_start + epoch_time
 
         # Test the Model
         correct = 0
@@ -190,7 +176,8 @@ def handler(event, context):
         test_acc.append(100 * correct / total)
         test_loss.append(tmp_test/count)
         epoch_start = time.time()
-    endTs = time.time()
-    print("elapsed time = {} s".format(endTs - startTs))
+
+    end_time = time.time()
+    print("elapsed time = {} s".format(end_time - start_time))
     loss_record = [test_loss,test_acc,train_loss,epoch_time]
     put_object("model-average-loss","average_loss{}".format(worker_index),pickle.dumps(loss_record))

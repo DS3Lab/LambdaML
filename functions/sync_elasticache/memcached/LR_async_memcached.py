@@ -20,7 +20,6 @@ from sync.sync_meta import SyncMeta
 
 
 # lambda setting
-
 grad_bucket = "async-grads"
 model_bucket = "async-updates"
 local_dir = "/tmp"
@@ -31,7 +30,7 @@ b_grad_prefix = "b_grad_"
 
 # algorithm setting
 
-learning_rate = 0.1#np.arange(0.09,0.15,0.01)
+learning_rate = 0.1     #np.arange(0.09,0.15,0.01)
 batch_size = 100000
 num_epochs = 55
 validation_ratio = .2
@@ -39,11 +38,8 @@ shuffle_dataset = True
 random_seed = 42
 
 
-
-
 def handler(event, context):
-
-    startTs = time.time()
+    start_time = time.time()
     bucket = event['bucket']
     key = event['name']
     num_features = event['num_features']
@@ -55,20 +51,15 @@ def handler(event, context):
 
     key_splits = key.split("_")
     worker_index = int(key_splits[0])
-    #num_worker = int(key_splits[1])
     num_worker = event['num_files']
-
     batch_size = 100000
     batch_size = int(np.ceil(batch_size/num_worker))
 
     torch.manual_seed(random_seed)
 
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
-
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
-    print("read data cost {} s".format(time.time() - startTs))
+    print("read data cost {} s".format(time.time() - start_time))
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
@@ -99,7 +90,6 @@ def handler(event, context):
 
     model = LogisticRegression(num_features, num_classes)
 
-
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
@@ -125,28 +115,27 @@ def handler(event, context):
             outputs = model(items)
             loss = criterion(outputs, labels)
             loss.backward()
+            optimizer.step()
 
             w = model.linear.weight.data.numpy()
             b = model.linear.bias.data.numpy()
             file_postfix = "{}_{}".format(batch_index,epoch)
             #asynchronization / shuffle starts from that every worker writes their gradients of this batch and epoch
             #upload individual gradient
-            if batch_index == 0 and epoch ==0:
+            if batch_index == 0 and epoch == 0:
                 hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
                 hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
-
-                time.sleep(0.0001)#
-                #randomly get one gradient from others. (Asynchronized)
-                w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
-                b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)
+                time.sleep(0.0001)
+                #randomly get one from others. (Asynchronized)
+                w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix), dtype=w.dtype).reshape(w.shape)
+                b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix), dtype=b.dtype).reshape(b.shape)
             else:
-                w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix),dtype = w.dtype).reshape(w.shape)
-                b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix),dtype = b.dtype).reshape(b.shape)
+                w_new = np.fromstring(hget_object(endpoint, model_bucket, w_prefix), dtype=w.dtype).reshape(w.shape)
+                b_new = np.fromstring(hget_object(endpoint, model_bucket, b_prefix), dtype=b.dtype).reshape(b.shape)
                 hset_object(endpoint, model_bucket, w_prefix, w.tobytes())
                 hset_object(endpoint, model_bucket, b_prefix, b.tobytes())
             model.linear.weight.data = torch.from_numpy(w_new)
             model.linear.bias.data = torch.from_numpy(b_new)
-            optimizer.step()
 
             #report train loss and test loss for every mini batch
             if (batch_index + 1) % 1 == 0:
@@ -156,18 +145,19 @@ def handler(event, context):
         total_time += time.time()-epoch_start
         train_loss.append(tmp_train)
 
-        tmp_test,tmp_acc = test(model,validation_loader,criterion)
+        tmp_test, tmp_acc = test(model, validation_loader, criterion)
         test_loss.append(tmp_test)
         test_acc.append(tmp_acc)
         epoch_start = time.time()
 
     print("total time = {}".format(total_time))
-    endTs = time.time()
-    print("elapsed time = {} s".format(endTs - startTs))
-    loss_record = [test_loss,test_acc,train_loss,total_time]
-    put_object("async-model-loss","async-loss{}".format(worker_index),pickle.dumps(loss_record))
+    end_time = time.time()
+    print("elapsed time = {} s".format(end_time - start_time))
+    loss_record = [test_loss, test_acc, train_loss, total_time]
+    put_object("async-model-loss", "async-loss{}".format(worker_index), pickle.dumps(loss_record))
 
-def test(model,testloader,criterion):
+
+def test(model, testloader, criterion):
     # Test the Model
     correct = 0
     total = 0
@@ -180,6 +170,6 @@ def test(model,testloader,criterion):
             total += labels.size(0)
             correct += (predicted == labels).sum()
             loss = criterion(outputs,labels)
-            total_loss+=loss.data
+            total_loss += loss.data
             count = count+1
     return total_loss/count, float(correct)/float(total)*100

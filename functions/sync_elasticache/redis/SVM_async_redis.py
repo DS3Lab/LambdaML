@@ -17,11 +17,9 @@ from sync.sync_grad_redis import *
 
 from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss, BinaryClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
-from sync.sync_meta import SyncMeta
 
 
 # lambda setting
-
 grad_bucket = "async-grads"
 model_bucket = "async-updates"
 local_dir = "/tmp"
@@ -31,7 +29,6 @@ w_grad_prefix = "w_grad_"
 b_grad_prefix = "b_grad_"
 
 # algorithm setting
-
 learning_rate = 0.02
 batch_size = 100000
 num_epochs = 50
@@ -40,11 +37,8 @@ shuffle_dataset = True
 random_seed = 42
 
 
-
-
 def handler(event, context):
-
-    startTs = time.time()
+    start_time = time.time()
     bucket = event['bucket']
     key = event['name']
     num_features = event['num_features']
@@ -57,8 +51,7 @@ def handler(event, context):
     print('key = {}'.format(key))
 
     key_splits = key.split("_")
-    worker_index = int(key_splits[0])
-    #num_worker = int(key_splits[1])
+    worker_index = event['worker_index']
     num_worker = event['num_files']
 
     batch_size = 100000
@@ -66,12 +59,9 @@ def handler(event, context):
 
     torch.manual_seed(random_seed)
 
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
-
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
-    print("read data cost {} s".format(time.time() - startTs))
+    print("read data cost {} s".format(time.time() - start_time))
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
@@ -101,7 +91,6 @@ def handler(event, context):
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
     model = DenseSVM(num_features, num_classes)
-
 
     # Loss and Optimizer
     # Softmax is internally computed.
@@ -165,9 +154,10 @@ def handler(event, context):
 
     print("total time = {}".format(total_time))
     endTs = time.time()
-    print("elapsed time = {} s".format(endTs - startTs))
+    print("elapsed time = {} s".format(endTs - start_time))
     loss_record = [test_loss,test_acc,train_loss,total_time]
     put_object("svm-async","async-loss{}".format(worker_index),pickle.dumps(loss_record))
+
 
 def test(model,testloader,criterion):
     # Test the Model

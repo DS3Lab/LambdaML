@@ -10,11 +10,13 @@ def avg_centroids(centroids_vec_list):
     cent_array = np.array(centroids_vec_list)
     return np.average(cent_array, axis=0)
 
+
 def KeysPool(bucket,num_workers,postfix):
     candidate = []
     for worker_index in range(num_workers):
         candidate.append(f"{bucket}_{worker_index}_{postfix}")
     return candidate
+
 
 def compute_average_centroids(endpoint, avg_cent_bucket, worker_cent_bucket, num_workers, shape, epoch, dt):
     num_files = 0

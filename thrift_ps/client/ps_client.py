@@ -1,3 +1,4 @@
+import time
 import sys
 sys.path.append("../../")
 
@@ -23,22 +24,25 @@ def register_model(thrift_client, worker_index, mid, length, n_worker):
 
 
 def exist_model(thrift_client, mid):
-    is_model_exist = False
+    is_model_exist = thrift_client.exist_model(mid)
     while is_model_exist is not True:
+        time.sleep(0.1)
         is_model_exist = thrift_client.exist_model(mid)
     return True
 
 
 def can_pull(thrift_client, mid, n_iter, worker_index):
-    flag = False
+    flag = thrift_client.can_pull(mid, n_iter, worker_index)
     while flag is not True:
+        time.sleep(0.1)
         flag = thrift_client.can_pull(mid, n_iter, worker_index)
     return flag
 
 
 def can_push(thrift_client, mid, n_iter, worker_index):
-    flag = False
+    flag = thrift_client.can_push(mid, n_iter, worker_index)
     while flag is not True:
+        time.sleep(0.1)
         flag = thrift_client.can_push(mid, n_iter, worker_index)
     return flag
 

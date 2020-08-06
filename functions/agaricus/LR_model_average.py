@@ -1,6 +1,5 @@
 import time
 import urllib.parse
-import logging
 import numpy as np
 
 import torch

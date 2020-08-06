@@ -1,6 +1,4 @@
 import time
-import urllib.parse
-import logging
 import numpy as np
 
 import torch
@@ -36,11 +34,8 @@ shuffle_dataset = True
 random_seed = 42
 
 
-
-
 def handler(event, context):
-
-    startTs = time.time()
+    start_time = time.time()
     bucket = event['bucket']
     key = event['name']
     num_features = event['num_features']
@@ -65,7 +60,7 @@ def handler(event, context):
 
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
-    print("read data cost {} s".format(time.time() - startTs))
+    print("read data cost {} s".format(time.time() - start_time))
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
@@ -91,12 +86,9 @@ def handler(event, context):
     validation_loader = torch.utils.data.DataLoader(dataset,
                                                     batch_size=batch_size,
                                                     sampler=valid_sampler)
-
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
-
     model = LogisticRegression(num_features, num_classes)
-
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
@@ -122,14 +114,13 @@ def handler(event, context):
             outputs = model(items)
             loss = criterion(outputs, labels)
             loss.backward()
-
-
             optimizer.step()
             if (batch_index + 1) % 1 == 0:
                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
                       % (epoch + 1, num_epochs, batch_index + 1, len(train_indices) / batch_size, loss.data))
             tmp_train = tmp_train+loss.item()
-        train_loss.append(tmp_train/(batch_index+1))
+
+        train_loss.append(tmp_train / (batch_index+1))
         #sync model
         w_model = model.linear.weight.data.numpy()
         b_model = model.linear.bias.data.numpy()
@@ -141,24 +132,18 @@ def handler(event, context):
         tmp_write_local_epoch_time = time.time()-sync_start
         print("write local model cost = {}".format(tmp_write_local_epoch_time))
 
-        #merge gradients among files
+        #merge model among files
         file_postfix = "{}".format(epoch)
-
         if worker_index == 0:
             merge_start = time.time()
-            w_model_merge, b_model_merge = \
-                merge_w_b_grads(endpoint,
-                                grad_bucket, num_worker, w_model.dtype,
-                                w_model.shape, b_model.shape,
-                                w_prefix, b_prefix)
+            w_model_merge, b_model_merge = merge_w_b_grads(endpoint,
+                                                           grad_bucket, num_worker, w_model.dtype,
+                                                           w_model.shape, b_model.shape,
+                                                           w_prefix, b_prefix)
 
-            put_merged_w_b_grads(endpoint,model_bucket,
-                                w_model_merge, b_model_merge, file_postfix,
-                                w_prefix, b_prefix)
-
-
+            put_merged_w_b_grads(endpoint, model_bucket, w_model_merge,
+                                 b_model_merge, file_postfix, w_prefix, b_prefix)
         else:
-
             w_model_merge, b_model_merge = get_merged_w_b_grads(endpoint,model_bucket, file_postfix,
                                                                 w_model.dtype, w_model.shape, b_model.shape,
                                                                 w_prefix, b_prefix)
@@ -189,6 +174,6 @@ def handler(event, context):
         test_loss.append(tmp_test/count)
         epoch_start = time.time()
     endTs = time.time()
-    print("elapsed time = {} s".format(endTs - startTs))
+    print("elapsed time = {} s".format(endTs - start_time))
     loss_record = [test_loss,test_acc,train_loss,epoch_time]
     put_object("model-average-loss","average_loss{}".format(worker_index),pickle.dumps(loss_record))

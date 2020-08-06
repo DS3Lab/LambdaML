@@ -3,6 +3,7 @@ import memcache
 from botocore.exceptions import ClientError
 from elasticache.Memcached.list_keys import hlist_keys
 
+
 def hset_object(client, key, field, src_data):
     """Add value from configured memcache under specified key of certain hashtable
 
@@ -12,8 +13,7 @@ def hset_object(client, key, field, src_data):
     :param src_data: bytesstream, int, string
     :return: True if src_data was added to memcache at client under key, otherwise False
     """
-
-    if isinstance(src_data,bytes) or isinstance(src_data,str) or isinstance(src_data,int):
+    if isinstance(src_data, bytes) or isinstance(src_data, str) or isinstance(src_data, int):
         object_data = src_data
     else:
         logging.error('Type of ' + str(type(src_data)) +
@@ -25,7 +25,7 @@ def hset_object(client, key, field, src_data):
     # Set the object
     try:
         mem_key = key + "_" + field
-        response = client.set(mem_key,object_data)
+        response = client.set(mem_key, object_data)
     except ClientError as e:
         logging.error(e)
         return False
@@ -35,5 +35,5 @@ def hset_object(client, key, field, src_data):
 def handler(event,context):
     mc = 'convergence.fifamc.cfg.euc1.cache.amazonaws.com'
     #mc = memcache.Client(['convergence.fifamc.cfg.euc1.cache.amazonaws.com:11211'])
-    print(hset_object(mc,"tmp_value","g_1",bytes("haha",'utf-8')))
-    print(hlist_keys(mc,["tmp_value_g_1","tmp_value_g_2"]))
+    print(hset_object(mc, "tmp_value","g_1", bytes("haha", 'utf-8')))
+    print(hlist_keys(mc, ["tmp_value_g_1", "tmp_value_g_2"]))

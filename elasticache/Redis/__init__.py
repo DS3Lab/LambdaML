@@ -13,6 +13,7 @@ import logging
 import redis
 from botocore.exceptions import ClientError
 
+
 def redis_init(endpoint):
     try:
         client = redis.Redis(host = endpoint, port = 6379, db = 0)

@@ -16,7 +16,6 @@ from sync.sync_grad_redis import *
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
-from sync.sync_meta import SyncMeta
 
 # lambda setting
 redis_location = "test.fifamc.ng.0001.euc1.cache.amazonaws.com"
@@ -29,7 +28,6 @@ w_grad_prefix = "w_grad_"
 b_grad_prefix = "b_grad_"
 
 # algorithm setting
-
 learning_rate = 0.1
 batch_size = 100
 num_epochs = 2
@@ -41,8 +39,7 @@ endpoint = redis_init(redis_location)
 
 
 def handler(event, context):
-    
-    startTs = time.time()
+    start_time = time.time()
     bucket = event['bucket']
     key = event['name']
     num_features = event['num_features']
@@ -53,14 +50,10 @@ def handler(event, context):
     key_splits = key.split("_")
     worker_index = int(key_splits[0])
     num_worker = int(key_splits[1])
-    
-    
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
-    
+
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
-    print("read data cost {} s".format(time.time() - startTs))
+    print("read data cost {} s".format(time.time() - start_time))
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
@@ -89,7 +82,6 @@ def handler(event, context):
     
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
     
-    
     model = LogisticRegression(num_features, num_classes)
 
     # Loss and Optimizer
@@ -111,7 +103,6 @@ def handler(event, context):
             outputs = model(items)
             loss = criterion(outputs, labels)
             loss.backward()
-
             print("forward and backward cost {} s".format(time.time()-batch_start))
 
             w_grad = model.linear.weight.grad.data.numpy()
@@ -136,27 +127,26 @@ def handler(event, context):
                                     w_grad_prefix, b_grad_prefix)
                 print("model average time = {}".format(time.time()-merge_start))
                 #possible rewrite the file before being accessed. wait until anyone finishes accessing.
-                while sync_counter(endpoint, model_bucket, num_worker):
-                    time.sleep(0.01)
-                put_merged_w_b_grad(endpoint,model_bucket, 
+                put_merged_w_b_grads(endpoint, model_bucket,
                                     w_grad_merge, b_grad_merge,
                                     w_grad_prefix, b_grad_prefix)
                 hset_object(endpoint, model_bucket, "epoch", epoch)
                 hset_object(endpoint, model_bucket, "index", batch_index)
-                
                 #delete_expired_w_b(endpoint,
                 #                   model_bucket, epoch, batch_index, w_grad_prefix, b_grad_prefix)
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
             else:
-                while hget_object(endpoint, model_bucket, "epoch")!=None:#wait for flag to access
-                    if int(hget_object(endpoint, model_bucket, "epoch")) == epoch and int(hget_object(endpoint, model_bucket, "index")) == batch_index:
+                # wait for flag to access
+                while hget_object(endpoint, model_bucket, "epoch") != None:
+                    if int(hget_object(endpoint, model_bucket, "epoch")) == epoch \
+                            and int(hget_object(endpoint, model_bucket, "index")) == batch_index:
                         break
                     time.sleep(0.01)
-                w_grad_merge, b_grad_merge = get_merged_w_b_grad(endpoint,model_bucket, 
+                w_grad_merge, b_grad_merge = get_merged_w_b_grads(endpoint,model_bucket,
                                                                     w_grad.dtype, w_grad.shape, b_grad.shape,
                                                                     w_grad_prefix, b_grad_prefix)
-                hcounter(endpoint, model_bucket, "counter")#flag it if it's accessed.
+                hcounter(endpoint, model_bucket, "counter") #flag it if it's accessed.
                 print("number of access at this time = {}".format(int(hget_object(endpoint, model_bucket, "counter"))))
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
@@ -192,5 +182,5 @@ def handler(event, context):
 
     print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
 
-    endTs = time.time()
-    print("elapsed time = {} s".format(endTs - startTs))
+    end_time = time.time()
+    print("elapsed time = {} s".format(end_time - start_time))

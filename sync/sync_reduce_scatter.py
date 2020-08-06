@@ -38,10 +38,8 @@ def reduce_scatter_batch(vector, tmp_bucket, merged_bucket, num_workers, myrank,
     num_files = 0
     while num_files < num_workers - 1:
         objects = list_bucket_objects(tmp_bucket)
-
         if objects is not None:
             for obj in objects:
-
                 file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
                 key_splits = file_key.split("_")
 
@@ -66,23 +64,18 @@ def reduce_scatter_batch(vector, tmp_bucket, merged_bucket, num_workers, myrank,
     already_read = []
     while num_merged_files < num_workers - 1:
         objects = list_bucket_objects(merged_bucket)
-
         if objects is not None:
             for obj in objects:
-
                 file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
                 key_splits = file_key.split("_")
                 # key format in merged_bucket: chunkID_epoch_batch
-                if key_splits[0] != str(myrank) and key_splits[1] == curr_epoch and key_splits[
-                    2] == curr_batch and file_key not in already_read:
+                if key_splits[0] != str(myrank) and key_splits[1] == curr_epoch and \
+                        key_splits[2] == curr_batch and file_key not in already_read:
                     # if not file_key.startswith(str(myrank)) and file_key not in already_read:
-
                     # key_splits = file_key.split("_")
                     data = get_object(merged_bucket, file_key).read()
                     bytes_data = np.frombuffer(data, dtype=vector.dtype)
-
                     merged_value[int(key_splits[0])] = bytes_data
-
                     already_read.append(file_key)
                     num_merged_files += 1
 
@@ -206,7 +199,7 @@ def reduce_scatter_epoch(vector, tmp_bucket, merged_bucket, num_workers, myrank,
     num_all_values = vector.size
     num_values_per_worker = num_all_values // num_workers
     residue = num_all_values % num_workers
-    curr_epoch = postfix
+    cur_epoch = int(postfix)
 
     my_offset = (num_values_per_worker * myrank) + min(residue, myrank)
     my_length = num_values_per_worker + (1 if myrank < residue else 0)
@@ -220,7 +213,7 @@ def reduce_scatter_epoch(vector, tmp_bucket, merged_bucket, num_workers, myrank,
             # indicating the chunk number and which worker it comes from
             key = "{}_{}".format(i, myrank)
 
-            # format of key in tmp-bucket: chunkID_workerID_epoch_batch
+            # format of key in tmp-bucket: chunkID_workerID_epoch
             put_object(tmp_bucket, key + '_' + postfix, vector[offset: offset + length].tobytes())
 
     # read and aggregate the corresponding chunk
@@ -236,7 +229,7 @@ def reduce_scatter_epoch(vector, tmp_bucket, merged_bucket, num_workers, myrank,
 
                 # if it's the chunk I care and it is from the current step
                 # format of key in tmp-bucket: chunkID_workerID_epoch_batch
-                if key_splits[0] == str(myrank) and key_splits[2] == str(curr_epoch):
+                if key_splits[0] == str(myrank) and key_splits[2] == str(cur_epoch):
                     data = get_object(tmp_bucket, file_key).read()
                     bytes_data = np.frombuffer(data, dtype=vector.dtype)
                     my_chunk = my_chunk + bytes_data
@@ -263,7 +256,7 @@ def reduce_scatter_epoch(vector, tmp_bucket, merged_bucket, num_workers, myrank,
                 key_splits = file_key.split("_")
 
                 # key format in merged_bucket: chunkID_epoch
-                if key_splits[0] != str(myrank) and key_splits[1] == str(curr_epoch) and file_key not in already_read:
+                if key_splits[0] != str(myrank) and key_splits[1] == str(cur_epoch) and file_key not in already_read:
                     # if not file_key.startswith(str(myrank)) and file_key not in already_read:
 
                     # key_splits = file_key.split("_")

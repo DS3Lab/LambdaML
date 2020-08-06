@@ -40,7 +40,8 @@ class Accuracy(object):
 
         self.correct += correct
         self.count += output.size(0)
-        
+
+
 class Average(object):
 
     def __init__(self):

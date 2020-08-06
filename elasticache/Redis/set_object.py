@@ -14,6 +14,7 @@ import redis
 from botocore.exceptions import ClientError
 from elasticache.Redis.get_object import get_object
 
+
 def set_object(client, key, src_data):
     """Add value from configured redis under specified key
     
@@ -27,9 +28,6 @@ def set_object(client, key, src_data):
     else:
         logging.error('Type of ' + str(type(src_data)) +
                       ' for the argument \'src_data\' is not supported.')
-        
-    
-    
     # Connect to redis
     #r = redis.Redis(host=endpoint, port=6379, db=0)
     # Set the object
@@ -42,7 +40,6 @@ def set_object(client, key, src_data):
     return True
         
 
-   
 def hset_object(client, key, field, src_data):
     """Add value from configured redis under specified key of certain hashtable
     
@@ -57,9 +54,6 @@ def hset_object(client, key, field, src_data):
     else:
         logging.error('Type of ' + str(type(src_data)) +
                       ' for the argument \'src_data\' is not supported.')
-        
-    
-    
     # Connect to redis
     #client = redis.Redis(host=endpoint, port=6379, db=0)
     # Set the object

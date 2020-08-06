@@ -11,7 +11,6 @@ from s3.delete_object import delete_object
 from s3.delete_objects import delete_objects
 
 
-
 def scatter_reduce(vector, tmp_bucket, merged_bucket, num_workers, myrank, postfix):
     
     # vector is supposed to be a 1-d numpy array
@@ -32,7 +31,6 @@ def scatter_reduce(vector, tmp_bucket, merged_bucket, num_workers, myrank, postf
             length = num_values_per_worker + (1 if i < residue else 0)
             # indicating the chunk number and which worker it comes from
             key = "{}_{}".format(i, myrank)
-            
             # format of key in tmp-bucket: chunkID_workerID_epoch_batch
             put_object(tmp_bucket, key + '_' + postfix, vector[offset : offset + length].tobytes())
     
@@ -40,7 +38,6 @@ def scatter_reduce(vector, tmp_bucket, merged_bucket, num_workers, myrank, postf
     num_files = 0
     while num_files < num_workers - 1:
         objects = list_bucket_objects(tmp_bucket)
-
         if objects is not None:
             for obj in objects:
 
@@ -69,16 +66,13 @@ def scatter_reduce(vector, tmp_bucket, merged_bucket, num_workers, myrank, postf
     already_read = []
     while num_merged_files < num_workers - 1:
         objects = list_bucket_objects(merged_bucket)
-
         if objects is not None:
             for obj in objects:
-
                 file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
                 key_splits = file_key.split("_")
                 #key format in merged_bucket: chunkID_epoch_batch
                 if key_splits[0] != str(myrank) and key_splits[1] == curr_epoch and key_splits[2] == curr_batch and file_key not in already_read:
                 # if not file_key.startswith(str(myrank)) and file_key not in already_read:
-
                     # key_splits = file_key.split("_")
                     data = get_object(merged_bucket, file_key).read()
                     bytes_data = np.frombuffer(data, dtype=vector.dtype)
@@ -92,14 +86,12 @@ def scatter_reduce(vector, tmp_bucket, merged_bucket, num_workers, myrank, postf
     result = merged_value[0]
     for k in range(1, num_workers):
         result = np.concatenate((result, merged_value[k]))
-
         # elif k == myrank:
         #     result = np.concatenate((result, my_chunk))
-
         # else:
         #     result = np.concatenate((result, merged_value[k]))
-
     return result
+
 
 # delete the merged values of the *current or older* steps
 def delete_expired_merged(bucket_name, cur_epoch, cur_batch):
@@ -115,9 +107,7 @@ def delete_expired_merged(bucket_name, cur_epoch, cur_batch):
                 delete_object(bucket_name, file_key)
 
 
-
 def merge_all_workers(bucket_name, num_workers, prefix):
-
     num_files = 0
     # merged_value = np.zeros(dshape, dtype=dtype)
     merged_value = []
@@ -127,25 +117,19 @@ def merge_all_workers(bucket_name, num_workers, prefix):
         if objects is not None:
             for obj in objects:
                 file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
-                
                 data_bytes = get_object(bucket_name, file_key).read()
                 data = pickle.loads(data_bytes)
-                
                 for i in range(len(data)):
                     if num_files == 0:
                         merged_value.append(np.zeros(data[i].shape, dtype=data[i].dtype))
-                        
                     merged_value[i] = merged_value[i] + data[i]
-                
                 num_files = num_files + 1
                 delete_object(bucket_name, file_key)
 
     # average weights
     # if prefix == 'w_':
     merged_value = [value / float(num_workers) for value in merged_value]
-
     return merged_value
-
 
 
 def put_merged(bucket_name, merged_value, prefix, file_postfix):
@@ -189,4 +173,3 @@ def clear_bucket(bucket_name):
             print("delete files {} in bucket {}".format(file_names, bucket_name))
             delete_objects(bucket_name, file_names)
     return True
-

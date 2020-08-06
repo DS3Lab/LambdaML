@@ -39,6 +39,22 @@ def list_bucket_objects(bucket_name):
     return None
 
 
+def list_bucket_objects2(s3_client, bucket_name):
+    # Retrieve the list of bucket objects
+    try:
+        response = s3_client.list_objects_v2(Bucket=bucket_name)
+    except ClientError as e:
+        # AllAccessDisabled error == bucket not found
+        logging.error(e)
+        return None
+
+    # Only return the contents if we found some keys
+    if response['KeyCount'] > 0:
+        return response['Contents']
+
+    return None
+
+
 def main():
     """Exercise list_bucket_objects()"""
 

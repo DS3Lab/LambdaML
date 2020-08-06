@@ -4,7 +4,6 @@ import boto3
 import numpy as np
 
 from s3.list_objects import list_bucket_objects
-from sync.sync_grad import merge_tensor
 
 # lambda setting
 tmp_bucket = "tmp-updates"

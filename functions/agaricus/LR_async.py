@@ -1,16 +1,14 @@
 import time
 import urllib.parse
-import logging
 import numpy as np
 
 import torch
 from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from s3.list_objects import list_bucket_objects
-from s3.get_object import get_object
+from s3.get_object import get_object, get_object_or_wait
 from s3.put_object import put_object
-from sync.sync_grad import *
+from sync.sync_grad import clear_bucket
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
@@ -35,7 +33,7 @@ random_seed = 42
 
 
 def handler(event, context):
-    startTs = time.time()
+    start_time = time.time()
     bucket = event['Records'][0]['s3']['bucket']['name']
     key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
 
@@ -50,7 +48,7 @@ def handler(event, context):
 
     # read file from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
-    print("read data cost {} s".format(time.time() - startTs))
+    print("read data cost {} s".format(time.time() - start_time))
 
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
@@ -151,5 +149,5 @@ def handler(event, context):
 
     print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
 
-    endTs = time.time()
-    print("elapsed time = {} s".format(endTs - startTs))
+    end_time = time.time()
+    print("elapsed time = {} s".format(end_time - start_time))

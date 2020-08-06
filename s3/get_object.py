@@ -36,6 +36,17 @@ def get_object(bucket_name, object_name):
     return response['Body']
 
 
+def get_object2(s3_client, bucket_name, object_name):
+    try:
+        response = s3_client.get_object(Bucket=bucket_name, Key=object_name)
+    except ClientError as e:
+        # AllAccessDisabled error == bucket or object not found
+        logging.error(e)
+        return None
+    # Return an open StreamingBody object
+    return response['Body']
+
+
 def get_object_or_wait(bucket_name, object_name, sleep_time):
     """Retrieve an object from an Amazon S3 bucket
 
@@ -51,6 +62,17 @@ def get_object_or_wait(bucket_name, object_name, sleep_time):
     while True:
         try:
             response = s3.get_object(Bucket=bucket_name, Key=object_name)
+            # Return an open StreamingBody object
+            return response['Body']
+        except ClientError as e:
+            # AllAccessDisabled error == bucket or object not found
+            time.sleep(sleep_time)
+
+
+def get_object_or_wait2(s3_client, bucket_name, object_name, sleep_time):
+    while True:
+        try:
+            response = s3_client.get_object(Bucket=bucket_name, Key=object_name)
             # Return an open StreamingBody object
             return response['Body']
         except ClientError as e:
@@ -74,7 +96,6 @@ def main():
     if stream is not None:
         # Read first chunk of the object's contents into memory as bytes
         data = stream.read(amt=1024)
-
         # Output object's beginning characters
         logging.info(f'{test_object_name}: {data[:60]}...')
 

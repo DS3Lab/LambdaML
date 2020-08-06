@@ -11,7 +11,6 @@ from s3.get_object import get_object
 from s3.put_object import put_object
 from elasticache.Memcached.__init__ import memcached_init
 from data_loader.LibsvmDataset import DenseLibsvmDataset2, SparseLibsvmDataset
-from sync.sync_meta import SyncMeta
 from functions.kmeans.utils import store_centroid_as_numpy, process_centroid, get_new_centroids
 
 # setting
@@ -39,8 +38,6 @@ def handler(event, context):
     key_splits = key.split("_")
     num_worker = int(key_splits[-1])
     worker_index = int(key_splits[0])
-    sync_meta = SyncMeta(worker_index, num_worker)
-    logger.info(f"Synchronizing meta {sync_meta.__str__()}")
 
     event_start = time.time()
     file = get_object(bucket_name, key).read().decode('utf-8').split("\n")

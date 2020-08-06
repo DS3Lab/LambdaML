@@ -4,15 +4,13 @@ import logging
 import time
 import numpy as np
 
-from sync.sync_centroids_elastic import compute_average_centroids
+from sync.sync_centroids_redis import compute_average_centroids
 from elasticache.Redis.get_object import hget_object_or_wait
 from elasticache.Redis.set_object import hset_object
 from s3.get_object import get_object
 from elasticache.Redis.__init__ import redis_init
 from data_loader.LibsvmDataset import DenseLibsvmDataset2, SparseLibsvmDataset
-from sync.sync_meta import SyncMeta
 from functions.kmeans.utils import store_centroid_as_numpy, process_centroid, get_new_centroids
-
 
 # setting
 logger = logging.getLogger()
@@ -39,8 +37,6 @@ def lambda_handler(event, context):
     key_splits = key.split("_")
     worker_index = int(key_splits[0])
     num_worker = int(key_splits[1])
-    sync_meta = SyncMeta(worker_index, num_worker)
-    logger.info(f"Synchronizing meta {sync_meta.__str__()}")
 
     event_start = time.time()
     file = get_object(bucket_name, key).read().decode('utf-8').split("\n")

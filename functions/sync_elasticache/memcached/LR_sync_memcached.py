@@ -16,10 +16,8 @@ from sync.sync_grad_memcached import *
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
-from sync.sync_meta import SyncMeta
 
 # lambda setting
-
 grad_bucket = "higgs-grads"
 model_bucket = "higgs-updates"
 local_dir = "/tmp"
@@ -29,7 +27,6 @@ w_grad_prefix = "w_grad_"
 b_grad_prefix = "b_grad_"
 
 # algorithm setting
-
 learning_rate = 0.05
 num_epochs = 30
 validation_ratio = .2
@@ -37,11 +34,8 @@ shuffle_dataset = True
 random_seed = 42
 
 
-
-
 def handler(event, context):
-
-    startTs = time.time()
+    start_time = time.time()
     bucket = event['bucket']
     key = event['name']
     num_features = event['num_features']
@@ -57,15 +51,12 @@ def handler(event, context):
     #num_worker = int(key_splits[1])
     num_worker = event['num_files']
 
-    batch_size = 100000/8
+    batch_size = 100000 / 8
     batch_size = int(np.ceil(batch_size/num_worker))
-
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
 
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
-    print("read data cost {} s".format(time.time() - startTs))
+    print("read data cost {} s".format(time.time() - start_time))
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
@@ -93,7 +84,6 @@ def handler(event, context):
                                                     sampler=valid_sampler)
 
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
-
 
     model = LogisticRegression(num_features, num_classes)
 
@@ -144,26 +134,22 @@ def handler(event, context):
 
             file_postfix = "{}_{}".format(epoch, batch_index)
             if worker_index == 0:
-
                 w_grad_merge, b_grad_merge = \
                     merge_w_b_grads(endpoint,
                                     grad_bucket, num_worker, w_grad.dtype,
                                     w_grad.shape, b_grad.shape,
                                     w_grad_prefix, b_grad_prefix)
-
                 #possible rewrite the file before being accessed. wait until anyone finishes accessing.
                 #while sync_counter(endpoint, model_bucket, num_worker):
                 #    time.sleep(0.01)
                 put_merged_w_b_grads(endpoint,model_bucket,
                                     w_grad_merge, b_grad_merge, file_postfix,
                                     w_grad_prefix, b_grad_prefix)
-
                 #delete_expired_w_b(endpoint,
                 #                   model_bucket, epoch, batch_index, w_grad_prefix, b_grad_prefix,end)
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
             else:
-
                 w_grad_merge, b_grad_merge = get_merged_w_b_grads(endpoint,model_bucket, file_postfix,
                                                                     w_grad.dtype, w_grad.shape, b_grad.shape,
                                                                     w_grad_prefix, b_grad_prefix)
@@ -172,16 +158,15 @@ def handler(event, context):
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
 
-
             tmp_sync_time = time.time() - sync_start
             #print("synchronization cost {} s".format(tmp_sync_time))
-
 
             optimizer.step()
             batch_cost = time.time()-batch_start
             print("batch cost = {}".format(batch_cost))
             tmp_train = tmp_train+loss.item()
             batch_start = time.time()
+
         epoch_time = epoch_time + time.time()-epoch_start
         print("epoch_time = {},train_loss = {}".format(epoch_time,tmp_train/(batch_index+1)))
         train_loss.append(tmp_train/(batch_index+1))
@@ -205,7 +190,7 @@ def handler(event, context):
         test_acc.append(100 * correct / total)
         epoch_start = time.time()
 
-    endTs = time.time()
-    print("elapsed time = {} s".format(endTs - startTs))
-    loss_record = [test_loss,test_acc,train_loss,epoch_time]
-    put_object("grad-average-loss","grad-loss{}".format(worker_index),pickle.dumps(loss_record))
+    end_time = time.time()
+    print("elapsed time = {} s".format(end_time - start_time))
+    loss_record = [test_loss, test_acc, train_loss, epoch_time]
+    put_object("grad-average-loss", "grad-loss{}".format(worker_index), pickle.dumps(loss_record))

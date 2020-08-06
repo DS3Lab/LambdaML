@@ -1,16 +1,14 @@
 import time
 import urllib.parse
-import logging
 import numpy as np
 
 import torch
 from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from s3.list_objects import list_bucket_objects
 from s3.get_object import get_object
 from s3.put_object import put_object
-from sync.sync_grad import *
+from sync.sync_grad import clear_bucket, merge_w_b_grads, put_merged_w_b_grad, delete_expired_w_b, get_merged_w_b_grad
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2

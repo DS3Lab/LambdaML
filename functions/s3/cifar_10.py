@@ -1,15 +1,4 @@
-
-
-
-
-merged_bucket = "merged-value"
-tmp_bucket = "tmp-value"
-
-weights_prefix = 'w_'
-gradients_prefix = 'g_'
-
-import os
-
+import sys
 import numpy as np
 import time
 import pickle
@@ -20,20 +9,20 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from s3.download_file import download_file
-
-from sync.sync_neural_network import *
-from sync.sync_meta import SyncMeta
-
-
 from s3.list_objects import list_bucket_objects
 from s3.get_object import get_object
 from s3.put_object import put_object
+from s3.download_file import download_file
+from sync.sync_neural_network import *
 
-from model.ResNet import *
-from model.mobilenet import *
+from pytorch_model.cifar10 import MobileNet
 
 
+# lambda setting
+merged_bucket = "cnn-updates"
+tmp_bucket = "cnn-grads"
+weights_prefix = 'w_'
+gradients_prefix = 'g_'
 local_dir = "/tmp"
 
 # dataset setting
@@ -50,38 +39,26 @@ learning_rate = 0.01
 batch_size = 32
 num_epochs = 1
 
-merged_bucket = "cnn-updates"
-tmp_bucket = "cnn-grads"
-
-weights_prefix = 'w_'
-gradients_prefix = 'g_'
-
 
 def handler(event, context):
-
-    startTs = time.time()
+    start_time = time.time()
     bucket = event['data_bucket']
     worker_index = event['rank']
     num_worker = event['num_workers'] 
     key = 'training_{}.pt'.format(worker_index)
     print('data_bucket = {}\n worker_index:{}\n num_worker:{}\n key:{}'.format(bucket, worker_index, num_worker, key))
 
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
-
     # read file from s3
     readS3_start = time.time()
- 
-    
     train_path = download_file(bucket, key)
     test_path = download_file(bucket, test_file)
-    trainset = torch.load(train_path)
-    testset= torch.load(test_path)
+    train_set = torch.load(train_path)
+    test_set= torch.load(test_path)
     print("read data cost {} s".format(time.time() - readS3_start))
-    print(trainset) 
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
-    print(enumerate(trainloader))
-    testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False)
+    print(train_set)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    print(enumerate(train_loader))
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=100, shuffle=False)
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
     device = 'cpu'
     # best_acc = 0  # best test accuracy
@@ -110,10 +87,11 @@ def handler(event, context):
     optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=5e-4)
     
     for epoch in range(num_epochs):
-        time_record = train(epoch, net, trainloader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step)
-        test(epoch, net, testloader, criterion, device)
-    put_object("time-record-s3","time_{}".format(worker_index),pickle.dumps(time_record))
-    
+        time_record = train(epoch, net, train_loader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step)
+        test(epoch, net, test_loader, criterion, device)
+    put_object("time-record-s3", "time_{}".format(worker_index), pickle.dumps(time_record))
+
+
 # Training
 def train(epoch, net, trainloader, optimizer, criterion, device, worker_index, num_worker, sync_mode, sync_step):
     # print('\nEpoch: %d' % epoch)
@@ -126,7 +104,6 @@ def train(epoch, net, trainloader, optimizer, criterion, device, worker_index, n
     calculation_epoch_time = []
     
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-
         print("------worker {} epoch {} batch {} sync mode '{}'------".format(worker_index, epoch+1, batch_idx+1,sync_mode))
         batch_start = time.time()
         
@@ -140,34 +117,24 @@ def train(epoch, net, trainloader, optimizer, criterion, device, worker_index, n
         if batch_idx != 0:
             calculation_epoch_time.append(tmp_calculation_time)
         if sync_mode == 'grad_avg':
-
             sync_start = time.time()
-            
             gradients = [param.grad.data.numpy() for param in net.parameters()]
             # print("[Worker {}] Gradients before sync = {}".format(worker_index, gradients[0][0]))
-            
-            
+
             put_object_start = time.time()
-            
             put_object(tmp_bucket, gradients_prefix + str(worker_index), pickle.dumps(gradients))
             tmp_write_local_epoch_time = time.time() - put_object_start
             print("write local gradients cost {} s".format(tmp_write_local_epoch_time))
             if batch_idx !=0 :
                 write_local_epoch_time.append(tmp_write_local_epoch_time)
- 
             file_postfix = "{}_{}".format(epoch, batch_idx)
             if worker_index == 0:
                 # merge all workers
-                
                 merged_value_start = time.time()
-                
-                merged_value = \
-                    merge_all_workers(tmp_bucket, num_worker, gradients_prefix)
-                    
-                    
+                merged_value = merge_all_workers(tmp_bucket, num_worker, gradients_prefix)
                 print("merged_value cost {} s".format(time.time() - merged_value_start))
                 
-                import sys
+
                 print("size of gradients = {}".format(sys.getsizeof(pickle.dumps(merged_value))/1024/1024))
                 
                 put_merged_start = time.time()
@@ -175,30 +142,22 @@ def train(epoch, net, trainloader, optimizer, criterion, device, worker_index, n
                 put_merged(merged_bucket, merged_value, gradients_prefix, file_postfix)                  
                 print("put_merged cost {} s".format(time.time() - put_merged_start))                   
                 delete_expired(merged_bucket, epoch, batch_idx, gradients_prefix)
-                
-                
             else:
-                
                 read_merged_start = time.time()
                 # get merged value from redis
                 merged_value = get_merged(merged_bucket, gradients_prefix, file_postfix)
                 print("read_merged cost {} s".format(time.time() - read_merged_start))
-                
-              
-                
+
             for layer_index, param in enumerate(net.parameters()):
                 param.grad = Variable(torch.from_numpy(merged_value[layer_index]))
-                
-            
+
             tmp_sync_time = time.time() - sync_start
             print("synchronization cost {} s".format(tmp_sync_time))
             if batch_idx != 0:
                 sync_epoch_time.append(tmp_sync_time)
 
             optimizer.step()
-            
 
-            
         train_loss += loss.item()
         _, predicted = outputs.max(1)
         total += targets.size(0)
@@ -206,7 +165,7 @@ def train(epoch, net, trainloader, optimizer, criterion, device, worker_index, n
         print("batch cost {} s".format(time.time() - batch_start))
         if (batch_idx + 1) % 10 == 0:
             print('Epoch: {}, Step: {}, Loss:{}'.format(epoch+1, batch_idx+1, loss.data))
-    return sync_epoch_time,write_local_epoch_time,calculation_epoch_time
+    return sync_epoch_time, write_local_epoch_time, calculation_epoch_time
 
 def test(epoch, net, testloader, criterion, device):
     # global best_acc

@@ -34,6 +34,7 @@ def delete_keys(client, keys):
         return False
     return True
 
+
 def hdelete_keys(client, key, fields):
     """delete the field within hash key in configured redis
     

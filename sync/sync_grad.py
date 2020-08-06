@@ -1,4 +1,3 @@
-import boto3
 import urllib
 
 import numpy as np
@@ -32,6 +31,7 @@ def merge_np_bytes(bucket_name, num_workers, dtype, shape):
             print('No objects in {}'.format(bucket_name))
 
     return sum_arr
+
 
 def merge_weights(bucket_name, num_workers, dtype, w_shape):
     num_w_files = 0

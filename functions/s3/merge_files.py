@@ -5,6 +5,9 @@ import boto3
 import logging
 import numpy as np
 
+from s3.list_objects import list_bucket_objects
+from s3.get_object import get_object
+
 print('Loading function')
 
 s3 = boto3.client('s3')
@@ -12,56 +15,12 @@ s3 = boto3.client('s3')
 
 def print_conf(event, context):
     # print("Received event: " + json.dumps(event, indent=2))
-
     print('## ENVIRONMENT VARIABLES')
     print(os.environ)
     print('## EVENT')
     print(event)
     print('## context')
     print(context)
-
-
-def list_bucket_objects(bucket_name):
-    """List the objects in an Amazon S3 bucket
-
-    :param bucket_name: string
-    :return: List of bucket objects. If error, return None.
-    """
-
-    # Retrieve the list of bucket objects
-    s_3 = boto3.client('s3')
-    try:
-        response = s_3.list_objects_v2(Bucket=bucket_name)
-    except ClientError as e:
-        # AllAccessDisabled error == bucket not found
-        logging.error(e)
-        return None
-
-    # Only return the contents if we found some keys
-    if response['KeyCount'] > 0:
-        return response['Contents']
-
-    return None
-
-
-def get_object(bucket_name, object_name):
-    """Retrieve an object from an Amazon S3 bucket
-
-    :param bucket_name: string
-    :param object_name: string
-    :return: botocore.response.StreamingBody object. If error, return None.
-    """
-
-    # Retrieve the object
-    s3 = boto3.client('s3')
-    try:
-        response = s3.get_object(Bucket=bucket_name, Key=object_name)
-    except ClientError as e:
-        # AllAccessDisabled error == bucket or object not found
-        logging.error(e)
-        return None
-    # Return an open StreamingBody object
-    return response['Body']
 
 
 def handler(event, context):

@@ -7,20 +7,20 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from elasticache.Memcached.set_object import hset_object
-from elasticache.Memcached.get_object import hget_object
-from elasticache.Memcached.__init__ import memcached_init
-from sync.sync_grad_memcached import *
+from elasticache.Redis.set_object import hset_object
+from elasticache.Redis.counter import hcounter
+from elasticache.Redis.get_object import hget_object
+from elasticache.Redis.__init__ import redis_init
+from sync.sync_grad_redis import *
 
 from s3.get_object import get_object
 from s3.put_object import put_object
 
-
 from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss, BinaryClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
-from sync.sync_meta import SyncMeta
-# lambda setting
 
+
+# lambda setting
 grad_bucket = "higgs-grads"
 model_bucket = "higgs-updates"
 local_dir = "/tmp"
@@ -37,8 +37,6 @@ shuffle_dataset = True
 random_seed = 42
 
 
-
-
 def handler(event, context):
 
     startTs = time.time()
@@ -47,7 +45,7 @@ def handler(event, context):
     num_features = event['num_features']
     num_classes = event['num_classes']
     elasti_location = event['elasticache']
-    endpoint = memcached_init(elasti_location)
+    endpoint = redis_init(elasti_location)
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
 
@@ -60,9 +58,6 @@ def handler(event, context):
     batch_size = int(np.ceil(batch_size/num_worker))
 
     torch.manual_seed(random_seed)
-
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
 
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
@@ -152,14 +147,10 @@ def handler(event, context):
                                 grad_bucket, num_worker, w_model.dtype,
                                 w_model.shape, b_model.shape,
                                 w_prefix, b_prefix)
-
             put_merged_w_b_grads(endpoint,model_bucket,
                                 w_model_merge, b_model_merge, file_postfix,
                                 w_prefix, b_prefix)
-
-
         else:
-
             w_model_merge, b_model_merge = get_merged_w_b_grads(endpoint,model_bucket, file_postfix,
                                                                 w_model.dtype, w_model.shape, b_model.shape,
                                                                 w_prefix, b_prefix)
@@ -190,7 +181,8 @@ def handler(event, context):
         test_acc.append(100 * correct / total)
         #print('Accuracy of the model on the %d test samples: %d %%' % (len(val_indices), 100 * correct / total))
         epoch_start = time.time()
-    endTs = time.time()
-    print("elapsed time = {} s".format(endTs - startTs))
+
+    end_time = time.time()
+    print("elapsed time = {} s".format(end_time - startTs))
     loss_record = [test_loss,test_acc,train_loss,epoch_time]
     put_object("svm-model-average","average_loss{}".format(worker_index),pickle.dumps(loss_record))

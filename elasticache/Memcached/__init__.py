@@ -13,6 +13,7 @@ import logging
 import memcache
 from botocore.exceptions import ClientError
 
+
 def memcached_init(endpoint):
     port = 11211
     try:

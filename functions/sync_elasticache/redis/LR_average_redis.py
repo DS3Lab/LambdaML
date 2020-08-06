@@ -17,9 +17,8 @@ from sync.sync_grad_redis import *
 
 from model.LogisticRegression import LogisticRegression
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
-from sync.sync_meta import SyncMeta
-# lambda setting
 
+# lambda setting
 grad_bucket = "higgs-grads"
 model_bucket = "higgs-updates"
 local_dir = "/tmp"
@@ -36,17 +35,14 @@ shuffle_dataset = True
 random_seed = 42
 
 
-
-
 def handler(event, context):
-
     startTs = time.time()
     bucket = event['bucket']
     key = event['name']
     num_features = event['num_features']
     num_classes = event['num_classes']
     elasti_location = event['elasticache']
-    endpoint = memcache_init(elasti_location)
+    endpoint = redis_init(elasti_location)
     print('bucket = {}'.format(bucket))
     print('key = {}'.format(key))
 
@@ -59,9 +55,6 @@ def handler(event, context):
     batch_size = int(np.ceil(batch_size/num_worker))
     
     torch.manual_seed(random_seed)
-
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
 
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
@@ -94,7 +87,6 @@ def handler(event, context):
 
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
-
     model = LogisticRegression(num_features, num_classes)
 
     # Loss and Optimizer
@@ -123,7 +115,6 @@ def handler(event, context):
             loss = criterion(outputs, labels)
             loss.backward()
 
-
             optimizer.step()
             if (batch_index + 1) % 1 == 0:
                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
@@ -143,7 +134,6 @@ def handler(event, context):
 
         #merge gradients among files
         file_postfix = "{}".format(epoch)
-
         if worker_index == 0:
             merge_start = time.time()
             w_model_merge, b_model_merge = \
@@ -151,14 +141,10 @@ def handler(event, context):
                                 grad_bucket, num_worker, w_model.dtype,
                                 w_model.shape, b_model.shape,
                                 w_prefix, b_prefix)
-
             put_merged_w_b_grads(endpoint,model_bucket,
                                 w_model_merge, b_model_merge, file_postfix,
                                 w_prefix, b_prefix)
-
-
         else:
-
             w_model_merge, b_model_merge = get_merged_w_b_grads(endpoint,model_bucket, file_postfix,
                                                                 w_model.dtype, w_model.shape, b_model.shape,
                                                                 w_prefix, b_prefix)
@@ -168,7 +154,6 @@ def handler(event, context):
 
         tmp_sync_time = time.time() - sync_start
         print("synchronization cost {} s".format(tmp_sync_time))
-
 
         # Test the Model
         correct = 0
@@ -192,5 +177,3 @@ def handler(event, context):
     print("elapsed time = {} s".format(endTs - startTs))
     loss_record = [test_loss,test_acc,train_loss,epoch_time]
     put_object("model-average-loss","average_loss{}".format(worker_index),pickle.dumps(loss_record))
-    
-        

@@ -24,8 +24,6 @@ def get_object(client, key):
     """
     # Connect to redis
     #r = redis.Redis(host=endpoint, port=6379, db=0)
-
-
     # Retrieve the object
     try:   
         response = client.get(name=key)
@@ -34,6 +32,7 @@ def get_object(client, key):
         logging.error(e)
         return None
     return response
+
 
 def get_object_or_wait(client, key, sleep_time):
     """Retrieve an object from configured redis under specified key
@@ -58,7 +57,6 @@ def get_object_or_wait(client, key, sleep_time):
         logging.error(e)
         return None
     
-
 
 def hget_object(client, key, field):
     """Retrieve an object from configured redis under specified key
@@ -106,8 +104,7 @@ def hget_object_or_wait(client, key, field, sleep_time):
         return None
 
 
-
 def handler(event, context):
-    endpoint = redis.Redis(host="test-001.fifamc.0001.euc1.cache.amazonaws.com",port=6379,db=0)
+    endpoint = redis.Redis(host="test-001.fifamc.0001.euc1.cache.amazonaws.com", port=6379, db=0)
     key = "lambdaml"
-    print(get_object(endpoint,key))
+    print(get_object(endpoint, key))

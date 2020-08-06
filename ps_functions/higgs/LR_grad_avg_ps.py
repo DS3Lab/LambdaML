@@ -142,7 +142,7 @@ def handler(event, context):
             sync_start = time.time()
             ps_client.can_push(t_client, model_name, iter_counter, worker_index)
             ps_client.push_grad(t_client, model_name, w_b_grad, LEARNING_RATE, iter_counter, worker_index)
-            ps_client.can_pull(t_client, model_name, iter_counter+1, worker_index)      # sync all workers
+            ps_client.can_pull(t_client, model_name, iter_counter + 1, worker_index)  # sync all workers
             sync_time = time.time() - sync_start
 
             print('Epoch: [%d/%d], Step: [%d/%d] >>> Time: %.4f, Loss: %.4f, epoch cost %.4f, '

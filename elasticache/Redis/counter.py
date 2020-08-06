@@ -33,8 +33,9 @@ def counter(client,key):
         return False
     
     return True
-        
-def hcounter(client,key,field):
+
+
+def hcounter(client, key, field):
     """increment by 1 under specific field of the key
     
     :param client: redis.client
@@ -57,9 +58,8 @@ def hcounter(client,key,field):
         
 
 def handler(event, context):
-  
     endpoint = "test.fifamc.ng.0001.euc1.cache.amazonaws.com"
-    client = redis.Redis(host=endpont,port=6379,db=0)
+    client = redis.Redis(host=endpoint, port=6379, db=0)
     print(counter(client,"LambdaML"))
 
              

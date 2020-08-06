@@ -13,18 +13,14 @@ from elasticache.Redis.get_object import hget_object
 from elasticache.Redis.__init__ import redis_init
 from sync.sync_grad_redis import *
 
-
 from s3.get_object import get_object
 from s3.put_object import put_object
 
-
-from pytorch_model.DenseSVM import DenseSVM,MultiClassHingeLoss, BinaryClassHingeLoss
+from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss, BinaryClassHingeLoss
 from data_loader.LibsvmDataset import DenseLibsvmDataset2
-from sync.sync_meta import SyncMeta
+
 
 # lambda setting
-
-
 local_dir = "/tmp"
 w_prefix = "w_"
 b_prefix = "b_"
@@ -32,7 +28,6 @@ w_grad_prefix = "w_grad_"
 b_grad_prefix = "b_grad_"
 
 # algorithm setting
-
 learning_rate = 0.025
 batch_size = 10000
 num_epochs = 50
@@ -41,12 +36,8 @@ shuffle_dataset = True
 random_seed = 42
 
 
-
-
-
 def handler(event, context):
-
-    startTs = time.time()
+    start_time = time.time()
     bucket = event['bucket']
     key = event['name']
     num_features = event['num_features']
@@ -61,11 +52,8 @@ def handler(event, context):
     grad_bucket = event['grad_bucket']
     model_bucket = event['model_bucket']
     key_splits = key.split("_")
-    worker_index = int(key_splits[0])
-    #num_worker = int(key_splits[1])
+    worker_index = event['worker_index']
     num_worker = event['num_files']
-    sync_meta = SyncMeta(worker_index, num_worker)
-    print("synchronization meta {}".format(sync_meta.__str__()))
 
     batch_size = 100000
     batch_size = int(np.ceil(batch_size/num_worker))
@@ -74,7 +62,7 @@ def handler(event, context):
 
     # read file(dataset) from s3
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
-    print("read data cost {} s".format(time.time() - startTs))
+    print("read data cost {} s".format(time.time() - start_time))
     parse_start = time.time()
     dataset = DenseLibsvmDataset2(file, num_features)
     preprocess_start = time.time()
@@ -103,7 +91,6 @@ def handler(event, context):
 
     print("preprocess data cost {} s".format(time.time() - preprocess_start))
 
-
     model = DenseSVM(num_features, num_classes)
 
     # Loss and Optimizer
@@ -124,7 +111,6 @@ def handler(event, context):
         batch_start = time.time()
         for batch_index, (items, labels) in enumerate(train_loader):
             print("------worker {} epoch {} batch {}------".format(worker_index, epoch, batch_index))
-
             items = Variable(items.view(-1, num_features))
             labels = Variable(labels)
 
@@ -143,7 +129,6 @@ def handler(event, context):
             b_grad = model.linear.bias.grad.data.numpy()
 
             #synchronization starts from that every worker writes their gradients of this batch and epoch
-
             sync_start = time.time()
             put_object_start = time.time()
             hset_object(endpoint, grad_bucket, w_grad_prefix + str(worker_index), w_grad.tobytes())
@@ -152,7 +137,6 @@ def handler(event, context):
             print("write local gradient cost = {}".format(tmp_write_local_epoch_time))
 
             #merge gradients among files
-
             file_postfix = "{}_{}".format(epoch, batch_index)
             if worker_index == 0:
                 merge_start = time.time()
@@ -161,36 +145,30 @@ def handler(event, context):
                                     grad_bucket, num_worker, w_grad.dtype,
                                     w_grad.shape, b_grad.shape,
                                     w_grad_prefix, b_grad_prefix)
-
-
                 put_merged_w_b_grads(endpoint,model_bucket,
                                     w_grad_merge, b_grad_merge, file_postfix,
                                     w_grad_prefix, b_grad_prefix)
                 hset_object(endpoint, model_bucket, "epoch", epoch)
                 hset_object(endpoint, model_bucket, "index", batch_index)
-
                 #delete_expired_w_b(endpoint,
                 #                   model_bucket, epoch, batch_index, w_grad_prefix, b_grad_prefix)
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
             else:
-
                 w_grad_merge, b_grad_merge = get_merged_w_b_grads(endpoint,model_bucket, file_postfix,
                                                                     w_grad.dtype, w_grad.shape, b_grad.shape,
                                                                     w_grad_prefix, b_grad_prefix)
-
                 model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                 model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
             tmp_sync_time = time.time() - sync_start
             print("synchronization cost {} s".format(tmp_sync_time))
 
-
             optimizer.step()
 
-
-            tmp_train=tmp_train+loss.item()
+            tmp_train = tmp_train+loss.item()
             print("batch cost = {}".format(time.time()-batch_start))
             batch_start = time.time()
+
         train_loss.append(tmp_train/(batch_index+1))
         epoch_time += time.time()-epoch_start
         print(time.time()-epoch_start)
