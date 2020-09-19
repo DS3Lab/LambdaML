@@ -16,13 +16,13 @@ master_ip=$4
 for ((i=0; i<$number_of_machines; i++)); do
 
         if [ $i -eq 0 ]; then
-            for ((j=0; j<$cores_per_machine; j++)); do    
-                /home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --init-method tcp://$master_ip --rank $j --world-size $world_size --root /home/ubuntu --no-cuda &
+            for ((j=0; j<$cores_per_machine; j++)); do
+                source activate pytorch_p36    
+                python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --init-method tcp://$master_ip --rank $j --world-size $world_size --root /home/ubuntu --no-cuda &
             done
         else
             for ((p=0; p<$cores_per_machine; p++)); do
-
-                ssh worker$i "/home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --init-method tcp://$master_ip --rank `expr $i \* $cores_per_machine + $p` --world-size $world_size --root /home/ubuntu --no-cuda" &
+                ssh worker$i "source activate pytorch_p36; python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --init-method tcp://$master_ip --rank `expr $i \* $cores_per_machine + $p` --world-size $world_size --root /home/ubuntu --no-cuda" &
             done
         fi
 done
