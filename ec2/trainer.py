@@ -107,7 +107,7 @@ class Trainer(object):
             train_acc.update(output, target)
 
             batch_time = time.time() - batch_start
-            print("Batch {} time is :{}".format(num_batch, batch_time))
+            print("Batch {} ,Loss:{} ,sync up time:{} ,computation time:{}, step time:{}".format(num_batch, loss, sync_time, batch_time-sync_time, batch_time))
 
         epoch_time = time.time() - epoch_start
         print("Epoch {} has {} batches, time = {} s, epoch cost {} s, sync time = {} s, cal time = {} s"

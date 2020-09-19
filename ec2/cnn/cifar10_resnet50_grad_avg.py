@@ -35,6 +35,7 @@ def run(args):
 
     train_loader, bsz, test_loader = partition_cifar10(args.batch_size, args.root, download=True)
     num_batches = ceil(len(train_loader.dataset) / float(bsz))
+    print("{} steps per epoch, local batch size:{}, num_batches:{}".format(len(train_loader), bsz, num_batches))
 
     model = ResNet50()
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
