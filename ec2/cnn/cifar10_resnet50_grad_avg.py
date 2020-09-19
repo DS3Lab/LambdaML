@@ -66,6 +66,10 @@ def main():
 
     if args.world_size > 1:
         dist.init_process_group(backend=args.backend, init_method=args.init_method, world_size=args.world_size, rank=args.rank)
+    if dist_is_initialized():
+        size = dist.get_world_size()
+        rank = dist.get_rank()
+        print("I am rank {} out of {}".format(rank, size))
 
     run(args)
 
