@@ -10,7 +10,7 @@ master_ip=$4
 # one machine
 for ((i=0; i<$world_size; i++)); do
   /home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --init-method tcp://$master_ip --rank $i --world-size $world_size --root /home/ubuntu/cifar10 --no-cuda &
-# done
+done
 
 # multiple machines
 # for ((i=0; i<$number_of_machines; i++)); do
@@ -25,10 +25,6 @@ for ((i=0; i<$world_size; i++)); do
 #             done
 #         fi
 # done
-
-
-
-
 
 
 # for ((i=0; i<$world_size; i++)); do
