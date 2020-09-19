@@ -12,6 +12,8 @@ from math import ceil
 from torch.multiprocessing import Process
 
 sys.path.append("../")
+# sys.path.append("../../../")
+# sys.path.append("../../../")
 
 from ec2.trainer import Trainer
 from ec2.data_partition import partition_cifar10
@@ -57,7 +59,7 @@ def main():
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)
     parser.add_argument('--root', type=str, default='data')
-    parser.add_argument('--batch-size', type=int, default=128)
+    parser.add_argument('--batch-size', type=int, default=32*10)
     args = parser.parse_args()
     print(args)
 

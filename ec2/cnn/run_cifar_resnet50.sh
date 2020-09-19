@@ -3,14 +3,14 @@
 world_size=$1
 # echo $world_size
 
-batch_size_local=$2
+# batch_size_local=$2
 # echo $batch_size_local
 # batch_size is the global batch size
-batch_size_global=`expr $world_size \* $batch_size_local`
+# batch_size_global=`expr $world_size \* $batch_size_local`
 
 for ((i=0; i<$world_size; i++)); do
-  source /home/ubuntu/envs/pytorch/bin/activate
-  python /home/ubuntu/code_2.0/LambdaML/ec2/cifar10_resnet50.py --init-method tcp://172.31.0.225:24000 --rank 0 --world-size $world_size --root /mnt --no-cuda --batch-size $batch_size_global &
+  # source /home/ubuntu/envs/pytorch/bin/activate
+  /home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --rank $i --world-size $world_size --root /mnt --no-cuda &
 done
 
 # if more than 10 nodes
