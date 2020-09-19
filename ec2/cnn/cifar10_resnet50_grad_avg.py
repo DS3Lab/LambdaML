@@ -11,8 +11,8 @@ import torch.optim as optim
 from math import ceil
 from torch.multiprocessing import Process
 
-sys.path.append("../")
-# sys.path.append("../../../")
+# sys.path.append("../")
+sys.path.append("../../")
 # sys.path.append("../../../")
 
 from ec2.trainer import Trainer
