@@ -9,7 +9,7 @@ world_size=$1
 # batch_size_global=`expr $world_size \* $batch_size_local`
 
 for ((i=0; i<$world_size; i++)); do
-  /home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --rank $i --world-size $world_size --root /mnt --no-cuda > resnet50_10.txt &
+  /home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --rank $i --world-size $world_size --root /home/ubuntu/cifar10 --no-cuda > resnet50_10.txt &
 done
 
 # if more than 10 nodes
