@@ -93,7 +93,9 @@ class Trainer(object):
             loss = F.cross_entropy(output, target)
 
             self.optimizer.zero_grad()
+            cal_start = time.time()
             loss.backward()
+            cal_time = time.time() - cal_start
 
             sync_start = time.time()
             if is_dist:
@@ -107,7 +109,7 @@ class Trainer(object):
             train_acc.update(output, target)
 
             batch_time = time.time() - batch_start
-            print("Batch {} ,Loss:{} ,sync up time:{} ,computation time:{}, step time:{}".format(num_batch, loss, sync_time, batch_time-sync_time, batch_time))
+            print("Batch {} ,Loss:{} ,sync up time:{} ,computation time:{}, step time:{}".format(num_batch, loss, sync_time, cal_time, batch_time))
 
         epoch_time = time.time() - epoch_start
         print("Epoch {} has {} batches, time = {} s, epoch cost {} s, sync time = {} s, cal time = {} s"
