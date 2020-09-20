@@ -47,7 +47,7 @@ def run(args):
         print("[{}] {} steps per epoch, local batch size:{}, num_batches:{}".format(args.rank, len(train_loader), bsz, num_batches))
         trainer = Trainer(model, optimizer, train_loader, test_loader, device)
 
-        p = mp.Process(target=trainer.fit, args=(args.epochs, is_dist=False))
+        p = mp.Process(target=trainer.fit, args=(args.epochs, is_dist=False,))
         p.start()
         processes.append(p)
     for p in processes:
