@@ -8,23 +8,23 @@ master_ip=$4
 
 
 # one machine
-# for ((i=0; i<$world_size; i++)); do
-#   /home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --rank $i --world-size $world_size --root /home/ubuntu/cifar10 --no-cuda &
-# done
+for ((i=0; i<$world_size; i++)); do
+  /home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --rank $i --world-size $world_size --root /home/ubuntu/cifar10 --no-cuda &
+done
 
 # multiple machines
-for ((i=0; i<$number_of_machines; i++)); do
+# for ((i=0; i<$number_of_machines; i++)); do
 
-        if [ $i -eq 0 ]; then
-            for ((j=0; j<$cores_per_machine; j++)); do   
-                /home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --init-method tcp://$master_ip --rank $j --world-size $world_size --root /home/ubuntu --no-cuda &
-            done
-        else
-            for ((p=0; p<$cores_per_machine; p++)); do
-                ssh resnet-10-node00$i "/home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --init-method tcp://$master_ip --rank `expr $i \* $cores_per_machine + $p` --world-size $world_size --root /home/ubuntu --no-cuda" &
-            done
-        fi
-done
+#         if [ $i -eq 0 ]; then
+#             for ((j=0; j<$cores_per_machine; j++)); do   
+#                 /home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --init-method tcp://$master_ip --rank $j --world-size $world_size --root /home/ubuntu --no-cuda &
+#             done
+#         else
+#             for ((p=0; p<$cores_per_machine; p++)); do
+#                 ssh resnet-10-node00$i "/home/ubuntu/anaconda3/envs/pytorch_p36/bin/python3 -u /home/ubuntu/LambdaML/ec2/cnn/cifar10_resnet50_grad_avg.py --init-method tcp://$master_ip --rank `expr $i \* $cores_per_machine + $p` --world-size $world_size --root /home/ubuntu --no-cuda" &
+#             done
+#         fi
+# done
 
 
 # for ((i=0; i<$world_size; i++)); do
