@@ -63,7 +63,7 @@ class Trainer(object):
             dist.all_reduce(param.grad.data, op=dist.ReduceOp.SUM)
             param.grad.data /= size
 
-    def fit(self, epochs, is_dist=True):
+    def fit(self, epochs, is_dist=False):
         for epoch in range(1, epochs + 1):
             train_loss, train_acc = self.train(epoch, is_dist)
             test_loss, test_acc = self.evaluate()
@@ -73,7 +73,7 @@ class Trainer(object):
                 'test loss: {}, test acc: {}.'.format(test_loss, test_acc),
             )
 
-    def train(self, epoch, is_dist=True):
+    def train(self, epoch, is_dist=False):
         self.model.train()
 
         epoch_start = time.time()
