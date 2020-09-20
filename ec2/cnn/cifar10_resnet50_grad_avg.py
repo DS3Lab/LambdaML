@@ -60,7 +60,7 @@ def main():
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)
     parser.add_argument('--root', type=str, default='data')
-    parser.add_argument('--batch-size', type=int, default=32*10)
+    parser.add_argument('--batch-size', type=int, default=32)
     args = parser.parse_args()
     print(args)
 
