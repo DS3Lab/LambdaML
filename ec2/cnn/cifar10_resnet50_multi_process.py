@@ -36,7 +36,7 @@ def run(args):
 
 
     model = ResNet50()
-    model..share_memory()
+    model.share_memory()
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
 
     processes = []
