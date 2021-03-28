@@ -1,6 +1,8 @@
 #!/bin/bash
 # 10 machines
 # ./rcv_lr_grad_avg.sh 5 20 47240 2 0.1 2000 /bigdata/rcv1/ 172.31.41.242:24000 t2.medium-10
+nohup python -u rcv_lr_grad_avg.py --init-method tcp://127.0.0.1 --rank 0 --world-size 1 --epochs 2 --features 1000000 --classes 2 --learning-rate 0.01 --batch-size 100000 --root /mnt/criteo.kaggle2014/ --no-cuda > logs/criteo_b100k 2>&1 &
+
 
 world_size=$1
 epochs=$2

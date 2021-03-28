@@ -12,6 +12,7 @@ from math import ceil
 from torch.multiprocessing import Process
 
 sys.path.append("../")
+sys.path.append("../../")
 
 from ec2.trainer import Trainer
 from ec2.data_partition import partition_cifar10
@@ -34,10 +35,10 @@ def run(args):
     train_loader, bsz, test_loader = partition_cifar10(args.batch_size, args.root, download=True)
     num_batches = ceil(len(train_loader.dataset) / float(bsz))
 
-    model = ResNet50()
+    model = ResNet50().to(device).float()
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
 
-    trainer = Trainer(model, optimizer, train_loader, test_loader, args, device)
+    trainer = Trainer(model, optimizer, train_loader, test_loader, device)
 
     trainer.fit(args.epochs, is_dist=dist_is_initialized())
 

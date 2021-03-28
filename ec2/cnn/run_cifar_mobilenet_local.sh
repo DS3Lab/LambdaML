@@ -21,6 +21,9 @@ done
 
 python -u cifar10_mobilenet_grad_avg.py --init-method tcp://$master_ip --world-size $world_size --rank 0 --root /home/ubuntu/dataset/cifar10/ --no-cuda --batch-size $batch_size --learning-rate $learning_rate --epochs $epochs > logs/master.log
 
+nohup python -u cifar10_resnet50_grad_avg.py --init-method tcp://127.0.0.1:24000 --world-size 1 --rank 0 --root /mnt/cifar-10-batches-py --batch-size 320 --learning-rate 0.01 --epochs 100 > logs/master.log 2>&1 &
+
+
 # if more than 10 nodes
 # for ((i=0; i<$world_size; i++)); do
 #         if [ $i -eq 0 ]; then
