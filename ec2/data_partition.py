@@ -80,7 +80,7 @@ def partition_mnist(batch_size, path, download=True):
     return train_loader, bsz, test_loader
 
 
-def partition_cifar10(batch_size, path, download=True):
+def partition_cifar10(batch_size, path, args, download=True):
     """ Partitioning Cifar10 """
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
@@ -101,6 +101,9 @@ def partition_cifar10(batch_size, path, download=True):
     if dist_is_initialized():
         size = dist.get_world_size()
         rank = dist.get_rank()
+    else:
+        size = args.world_size
+        rank = args.rank
     bsz = int(batch_size / float(size))
     train_partition_sizes = [1.0 / size for _ in range(size)]
     train_partition = DataPartitioner(train_dataset, train_partition_sizes)

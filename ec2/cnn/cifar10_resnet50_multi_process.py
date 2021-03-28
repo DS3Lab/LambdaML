@@ -19,6 +19,7 @@ from ec2.trainer import Trainer
 from ec2.data_partition import partition_cifar10
 
 from pytorch_model.resnet import ResNet50
+import torch.multiprocessing as mp
 
 
 def dist_is_initialized():
@@ -33,16 +34,26 @@ def run(args):
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
     torch.manual_seed(1234)
 
-    train_loader, bsz, test_loader = partition_cifar10(args.batch_size, args.root, download=True)
-    num_batches = ceil(len(train_loader.dataset) / float(bsz))
-    print("[{}] {} steps per epoch, local batch size:{}, num_batches:{}".format(args.rank, len(train_loader), bsz, num_batches))
 
     model = ResNet50()
+    model.share_memory()
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
 
-    trainer = Trainer(model, optimizer, train_loader, test_loader, device)
+    processes = []
+    for rank in range(args.world_size):
+        args.rank = rank
+        train_loader, bsz, test_loader = partition_cifar10(args.batch_size, args.root, args, download=True)
+        num_batches = ceil(len(train_loader.dataset) / float(bsz))
+        print("[{}] {} steps per epoch, local batch size:{}, num_batches:{}".format(args.rank, len(train_loader), bsz, num_batches))
+        trainer = Trainer(model, optimizer, train_loader, test_loader, device)
 
-    trainer.fit(args.epochs, is_dist=dist_is_initialized())
+        p = mp.Process(target=trainer.fit, args=(args.epochs,))
+        p.start()
+        processes.append(p)
+    for p in processes:
+        p.join()
+
+    # trainer.fit(args.epochs, is_dist=False)
 
 
 def main():
@@ -54,7 +65,7 @@ def main():
         type=str,
         default='tcp://127.0.0.1:23456',
         help='URL specifying how to initialize the package.')
-    parser.add_argument('-s', '--world-size', type=int, default=1, help='Number of processes participating in the job.')
+    parser.add_argument('-s', '--world-size', type=int, default=10, help='Number of processes participating in the job.')
     parser.add_argument('-r', '--rank', type=int, default=0, help='Rank of the current process.')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--no-cuda', action='store_true')
@@ -64,12 +75,12 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    if args.world_size > 1:
-        dist.init_process_group(backend=args.backend, init_method=args.init_method, world_size=args.world_size, rank=args.rank)
-    if dist_is_initialized():
-        size = dist.get_world_size()
-        rank = dist.get_rank()
-        print("I am rank {} out of {}".format(rank, size))
+    # if args.world_size > 1:
+    #     dist.init_process_group(backend=args.backend, init_method=args.init_method, world_size=args.world_size, rank=args.rank)
+    # if dist_is_initialized():
+    #     size = dist.get_world_size()
+    #     rank = dist.get_rank()
+    #     print("I am rank {} out of {}".format(rank, size))
 
     run(args)
 

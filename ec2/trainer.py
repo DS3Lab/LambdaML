@@ -63,7 +63,7 @@ class Trainer(object):
             dist.all_reduce(param.grad.data, op=dist.ReduceOp.SUM)
             param.grad.data /= size
 
-    def fit(self, epochs, is_dist=True):
+    def fit(self, epochs, is_dist=False):
         for epoch in range(1, epochs + 1):
             train_loss, train_acc = self.train(epoch, is_dist)
             test_loss, test_acc = self.evaluate()
@@ -73,7 +73,7 @@ class Trainer(object):
                 'test loss: {}, test acc: {}.'.format(test_loss, test_acc),
             )
 
-    def train(self, epoch, is_dist=True):
+    def train(self, epoch, is_dist=False):
         self.model.train()
 
         epoch_start = time.time()
@@ -93,7 +93,9 @@ class Trainer(object):
             loss = F.cross_entropy(output, target)
 
             self.optimizer.zero_grad()
+            cal_start = time.time()
             loss.backward()
+            cal_time = time.time() - cal_start
 
             sync_start = time.time()
             if is_dist:
@@ -107,6 +109,7 @@ class Trainer(object):
             train_acc.update(output, target)
 
             batch_time = time.time() - batch_start
+            print("Batch {} ,Loss:{} ,sync up time:{} ,computation time:{}, step time:{}".format(num_batch, loss, sync_time, cal_time, batch_time))
 
         epoch_time = time.time() - epoch_start
         print("Epoch {} has {} batches, time = {} s, epoch cost {} s, sync time = {} s, cal time = {} s"
