@@ -92,7 +92,7 @@ def async_train(epoch, net, trainloader, optimizer, device, worker_index, num_wo
         
         # get local model
         weights = [param.data.numpy() for param in net.parameters()]
-        # print('Before comm:{}'.format(weights[0][0]))
+        # print('Before communicator:{}'.format(weights[0][0]))
         
         # push local model
         put_object(tmp_bucket, 'latest_model', pickle.dumps(weights))
@@ -106,7 +106,7 @@ def async_train(epoch, net, trainloader, optimizer, device, worker_index, num_wo
             param.data = torch.from_numpy(new_model_np[layer_index])
             
         # weights_after = [param.data.numpy() for param in net.parameters()]
-        # print('After comm:{}'.format(weights_after[0][0]))
+        # print('After communicator:{}'.format(weights_after[0][0]))
             
         epoch_comm_time += time.time() - comm_start
                     
@@ -120,7 +120,7 @@ def async_train(epoch, net, trainloader, optimizer, device, worker_index, num_wo
         num_batch += 1
         
     epoch_time = time.time() - epoch_start
-    print("Epoch {} has {} batches, time = {} s, comm time = {} s, cal time = {} s".format(epoch+1, num_batch, epoch_time, epoch_comm_time, epoch_time - epoch_comm_time))
+    print("Epoch {} has {} batches, time = {} s, communicator time = {} s, cal time = {} s".format(epoch+1, num_batch, epoch_time, epoch_comm_time, epoch_time - epoch_comm_time))
     
     return train_loss, train_acc
 
