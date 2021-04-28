@@ -200,3 +200,17 @@ def set_object_v2(client, key, field, src_data):
         logging.error(e)
         return False
     return True
+
+
+def list_keys(client, keys):
+    """
+
+    :param client: string
+    :param keys: list of candidate keys
+    :return: True if all keys exist, None otherwise
+    """
+    objects = client.client.get_multi(keys)
+    if bool(objects):
+        return objects
+    else:
+        return None

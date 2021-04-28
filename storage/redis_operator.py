@@ -32,7 +32,7 @@ def delete_fields(client, key, fields):
     :param client: redis client object
     :param key: string
     :param fields: string or list of strings
-    :return: True if the reference objects were deleted or don't exsit, otherwise False
+    :return: True if the reference objects were deleted or don't exist, otherwise False
     """
 
     try:

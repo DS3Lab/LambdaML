@@ -7,13 +7,13 @@ class BaseStorage(object):
     def __init__(self, __name, **kwargs):
         self.name = __name
 
-    def save(self, src_data, **kwargs):
+    def save(self, src_data, key, **kwargs):
         return
 
-    def load(self, **kwargs):
+    def load(self, key, **kwargs):
         return
 
-    def load_or_wait(self, **kwargs):
+    def load_or_wait(self, key, **kwargs):
         return
 
     def delete(self, key, **kwargs):
@@ -32,20 +32,23 @@ class S3Storage(BaseStorage):
         super(S3Storage, self).__init__(name)
         self.client = s3_operator.get_client()
 
-    def save(self, src_data, bucket_name="", object_name=""):
-        s3_operator.put_object(self.client, bucket_name, object_name, src_data)
+    def save(self, src_data, object_name, bucket_name=""):
+        return s3_operator.put_object(self.client, bucket_name, object_name, src_data)
 
-    def load(self, bucket_name="", object_name=""):
+    def load(self, object_name, bucket_name=""):
         return s3_operator.get_object(self.client, bucket_name, object_name)
 
-    def load_or_wait(self, bucket_name="", object_name="", sleep_time=0.1, time_out=60):
+    def load_or_wait(self, object_name, bucket_name="", sleep_time=0.1, time_out=60):
         return s3_operator.get_object_or_wait(self.client, bucket_name, object_name, sleep_time, time_out)
 
     def delete(self, key, bucket_name=""):
         if isinstance(key, str):
-            s3_operator.delete_object(self.client, bucket_name, key)
+            return s3_operator.delete_object(self.client, bucket_name, key)
         elif isinstance(key, list):
-            s3_operator.delete_objects(self.client, bucket_name, key)
+            return s3_operator.delete_objects(self.client, bucket_name, key)
+
+    def list(self, bucket_name=""):
+        return s3_operator.list_bucket_objects(self.client, bucket_name)
 
 
 class RedisStorage(BaseStorage):
@@ -54,15 +57,23 @@ class RedisStorage(BaseStorage):
         super(RedisStorage, self).__init__(name)
         self.client = redis_operator.get_client(ip, port)
 
-    def save(self, src_data, key=""):
-        redis_operator.set_object(self.client, key, src_data)
-        return True
+    def save(self, src_data, key, **kwargs):
+        return redis_operator.set_object(self.client, key, src_data)
 
-    def load(self, key=""):
+    def load(self, key, **kwargs):
         return redis_operator.get_object(self.client, key)
 
-    def load_or_wait(self, key="", sleep_time=0.1, time_out=60):
+    def load_or_wait(self, key, sleep_time=0.1, time_out=60):
         return redis_operator.get_object_or_wait(self.client, key, sleep_time, time_out)
+
+    def delete(self, key, **kwargs):
+        return redis_operator.delete_keys(self.client, key)
+
+    def delete_v2(self, key, fields):
+        return redis_operator.delete_fields(self.client, key, fields)
+
+    def list(self):
+        return redis_operator.list_keys(self.client, count=10000)
 
 
 class MemcachedStorage(BaseStorage):
@@ -71,20 +82,28 @@ class MemcachedStorage(BaseStorage):
         super(MemcachedStorage, self).__init__(name)
         self.client = memcached_operator.get_client(ip, port)
 
-    def save(self, src_data, key=""):
-        memcached_operator.set_object(self.client, key, src_data)
-        return True
+    def save(self, src_data, key, **kwargs):
+        return memcached_operator.set_object(self.client, key, src_data)
 
-    def load(self, key=""):
+    def load(self, key, **kwargs):
         return memcached_operator.get_object(self.client, key)
 
-    def load_v2(self, key="", field=""):
+    def load_v2(self, key, field):
         return memcached_operator.get_object_v2(self.client, key, field)
 
-    def load_or_wait(self, key="", sleep_time=0.1, time_out=60):
+    def load_or_wait(self, key, sleep_time=0.1, time_out=60):
         return memcached_operator.get_object_or_wait(self.client, key, sleep_time, time_out)
 
-    def load_or_wait_v2(self, key="", field="", sleep_time=0.1, time_out=60):
+    def load_or_wait_v2(self, key, field, sleep_time=0.1, time_out=60):
         return memcached_operator.get_object_or_wait_v2(self.client, key, field, sleep_time, time_out)
+
+    def delete(self, key, **kwargs):
+        if isinstance(key, str):
+            return memcached_operator.delete_key(self.client, key)
+        elif isinstance(key, list):
+            return memcached_operator.delete_keys(self.client, key)
+
+    def list(self, keys=[""]):
+        return memcached_operator.list_keys(self.client, keys)
 
 
