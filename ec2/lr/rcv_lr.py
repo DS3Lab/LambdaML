@@ -10,7 +10,7 @@ sys.path.append("../../")
 
 from pytorch_model.sparse_lr import *
 from ec2.data_partition import partition_sparse
-from data_loader.LibsvmDataset import SparseLibsvmDataset
+from data_loader.LibsvmDataset import SparseDatasetWithLines
 
 
 def dist_is_initialized():
@@ -31,7 +31,7 @@ def run(args):
     read_start = time.time()
     torch.manual_seed(1234)
     train_file = open(args.train_file, 'r').readlines()
-    dataset = SparseLibsvmDataset(train_file, args.features)
+    dataset = SparseDatasetWithLines(train_file, args.features)
     logging.info(f"Loading dataset costs {time.time() - read_start}s")
 
     preprocess_start = time.time()

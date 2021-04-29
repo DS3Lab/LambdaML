@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 
-from data_loader.LibsvmDataset import SparseLibsvmDataset
+from data_loader.LibsvmDataset import SparseDatasetWithLines
 
 
 def dist_is_initialized():
@@ -166,7 +166,7 @@ class LogisticRegression(object):
 if __name__ == "__main__":
     train_file = "../dataset/agaricus_127d_train.libsvm"
     test_file = "../dataset/agaricus_127d_test.libsvm"
-    train_data = SparseLibsvmDataset(train_file, 127)
-    test_data = SparseLibsvmDataset(test_file, 127)
+    train_data = SparseDatasetWithLines(train_file, 127)
+    test_data = SparseDatasetWithLines(test_file, 127)
     lr = LogisticRegression(train_data, test_data, 127, 20, 0.01, 10)
     lr.fit()

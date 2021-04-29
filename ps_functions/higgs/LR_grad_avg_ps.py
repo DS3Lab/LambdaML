@@ -11,7 +11,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from sync.sync_grad import *
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from data_loader.LibsvmDataset import DenseDatasetWithLines
 
 from thrift_ps.ps_service import ParameterServer
 from thrift_ps.client import ps_client
@@ -70,7 +70,7 @@ def handler(event, context):
 
     # parse dataset
     parse_start = time.time()
-    dataset = DenseLibsvmDataset2(file, NUM_FEATURES)
+    dataset = DenseDatasetWithLines(file, NUM_FEATURES)
     print("parse data cost {} s".format(time.time() - parse_start))
 
     # preprocess dataset

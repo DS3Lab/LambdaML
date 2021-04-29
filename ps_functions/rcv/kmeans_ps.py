@@ -2,7 +2,7 @@ from sync.sync_grad import *
 from functions.kmeans.utils import *
 from model.Kmeans import *
 
-from data_loader.LibsvmDataset import SparseLibsvmDataset, DenseLibsvmDataset2
+from data_loader.LibsvmDataset import SparseDatasetWithLines, DenseDatasetWithLines
 from thrift_ps.ps_service import ParameterServer
 from thrift_ps.client import ps_client
 
@@ -60,12 +60,12 @@ def handler(event, context):
     print(f"Getting object from s3 takes {s3_end - event_start}s")
     if dataset_type == "dense":
         # dataset is stored as numpy array
-        dataset = DenseLibsvmDataset2(file, num_features).ins_np
+        dataset = DenseDatasetWithLines(file, num_features).ins_np
         dt = dataset.dtype
         centroid_shape = (num_clusters, dataset.shape[1])
     else:
         # dataset is sparse, stored as sparse tensor
-        dataset = SparseLibsvmDataset(file, num_features)
+        dataset = SparseDatasetWithLines(file, num_features)
         first_entry = dataset.ins_list[0].to_dense().numpy()
         dt = first_entry.dtype
         centroid_shape = (num_clusters, first_entry.shape[1])

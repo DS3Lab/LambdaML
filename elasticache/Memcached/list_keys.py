@@ -15,4 +15,4 @@ def hlist_keys(client, keys):
 def handler(event,context):
     #mc = memcache.Client(['convergence.fifamc.cfg.euc1.cache.amazonaws.com:11211'])
     mc = 'convergence.fifamc.cfg.euc1.cache.amazonaws.com'
-    print(hlist_keys(mc, ["tmp_value_g_1","tmp_value_g_2"]))
+    print(hlist_keys(mc, ["tmp_value_g_1", "tmp_value_g_2"]))

@@ -32,7 +32,7 @@ def run(args):
     file_name = "{}/{}_{}".format(args.root, args.rank, args.world_size)
     file = open(file_name, 'r').readlines()
     #dataset = partition_sparse(train_file, args.features)
-    dataset = SparseLibsvmDataset(file, args.features)
+    dataset = SparseDatasetWithLines(file, args.features)
     print(f"Loading dataset costs {time.time() - read_start}s")
 
     preprocess_start = time.time()

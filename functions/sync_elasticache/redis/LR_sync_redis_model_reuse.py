@@ -15,7 +15,7 @@ from s3.get_object import get_object
 from sync.sync_grad_redis import *
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from data_loader.LibsvmDataset import DenseDatasetWithLines
 
 # lambda setting
 redis_location = "test.fifamc.ng.0001.euc1.cache.amazonaws.com"
@@ -55,7 +55,7 @@ def handler(event, context):
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
     print("read data cost {} s".format(time.time() - start_time))
     parse_start = time.time()
-    dataset = DenseLibsvmDataset2(file, num_features)
+    dataset = DenseDatasetWithLines(file, num_features)
     preprocess_start = time.time()
     print("libsvm operation cost {}s".format(parse_start - preprocess_start))
    

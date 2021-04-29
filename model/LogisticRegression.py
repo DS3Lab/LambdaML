@@ -5,7 +5,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 import numpy as np
 
-from data_loader.LibsvmDataset import DenseLibsvmDataset
+from data_loader.LibsvmDataset import DenseDatasetWithFile
 
 
 class LogisticRegression(torch.nn.Module):
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     random_seed = 42
 
     file = "../dataset/agaricus_127d_train.libsvm"
-    libsvm_dataset = DenseLibsvmDataset(file, num_features)
+    libsvm_dataset = DenseDatasetWithFile(file, num_features)
 
     # Creating data indices for training and validation splits:
     dataset_size = len(libsvm_dataset)

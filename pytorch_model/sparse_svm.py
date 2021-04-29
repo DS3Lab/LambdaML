@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 
-from data_loader.LibsvmDataset import SparseLibsvmDataset
+from data_loader.LibsvmDataset import SparseDatasetWithLines
 
 
 def dist_is_initialized():
@@ -277,7 +277,7 @@ class SparseSVM2(object):
 if __name__ == "__main__":
     train_file = "../dataset/agaricus_127d_train.libsvm"
     test_file = "../dataset/agaricus_127d_test.libsvm"
-    dataset = SparseLibsvmDataset(open(train_file).readlines(), 127)
+    dataset = SparseDatasetWithLines(open(train_file).readlines(), 127)
     dataset_size = len(dataset)
     indices = list(range(dataset_size))
     split = int(np.floor(0.1 * dataset_size))

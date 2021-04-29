@@ -226,3 +226,18 @@ def hset_object(client, key, field, src_data):
         return False
     return True
 
+
+def clear_all(client):
+    """
+
+    :param client: redis client object
+    :return: True if flush_all successes, False otherwise
+    """
+    try:
+        response = client.flushall()
+    except ClientError as e:
+        # AllAccessDisabled error == client lost
+        logging.error(e)
+        return False
+    return True
+

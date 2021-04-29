@@ -1,4 +1,3 @@
-import boto3
 from storage import s3_operator, redis_operator, memcached_operator
 
 
@@ -47,6 +46,9 @@ class S3Storage(BaseStorage):
         elif isinstance(key, list):
             return s3_operator.delete_objects(self.client, bucket_name, key)
 
+    def clear(self, bucket_name=""):
+        return s3_operator.clear_bucket(bucket_name)
+
     def list(self, bucket_name=""):
         return s3_operator.list_bucket_objects(self.client, bucket_name)
 
@@ -71,6 +73,9 @@ class RedisStorage(BaseStorage):
 
     def delete_v2(self, key, fields):
         return redis_operator.delete_fields(self.client, key, fields)
+
+    def clear(self, **kwargs):
+        return redis_operator.clear_all(self.client)
 
     def list(self):
         return redis_operator.list_keys(self.client, count=10000)
@@ -102,6 +107,9 @@ class MemcachedStorage(BaseStorage):
             return memcached_operator.delete_key(self.client, key)
         elif isinstance(key, list):
             return memcached_operator.delete_keys(self.client, key)
+
+    def clear(self, **kwargs):
+        return memcached_operator.clear_all(self.client)
 
     def list(self, keys=[""]):
         return memcached_operator.list_keys(self.client, keys)

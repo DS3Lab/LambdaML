@@ -4,7 +4,7 @@ import urllib.parse
 import numpy as np
 
 import torch
-from data_loader.LibsvmDataset import SparseLibsvmDataset
+from data_loader.LibsvmDataset import SparseDatasetWithLines
 from s3.get_object import get_object
 from pytorch_model.sparse_svm import *
 
@@ -41,7 +41,7 @@ def handler(event, context):
         print("read data cost {} s".format(time.time() - start_time))
 
         parse_start = time.time()
-        dataset = SparseLibsvmDataset(file, num_features)
+        dataset = SparseDatasetWithLines(file, num_features)
         print("parse data cost {} s".format(time.time() - parse_start))
 
         preprocess_start = time.time()

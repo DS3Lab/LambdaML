@@ -10,7 +10,7 @@ from s3.clear_bucket import clear_bucket
 from sync.sync_reduce import reduce_epoch, delete_expired_merged_epoch
 
 from model.SVM import SVM
-from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from data_loader.LibsvmDataset import DenseDatasetWithLines
 
 # lambda setting
 local_dir = "/tmp"
@@ -53,7 +53,7 @@ def handler(event, context):
     print("read data cost {} s".format(time.time() - start_time))
 
     parse_start = time.time()
-    dataset = DenseLibsvmDataset2(file, num_features)
+    dataset = DenseDatasetWithLines(file, num_features)
     print("parse data cost {} s".format(time.time() - parse_start))
 
     preprocess_start = time.time()

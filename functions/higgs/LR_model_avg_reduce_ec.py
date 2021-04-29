@@ -14,7 +14,7 @@ from elasticache.Memcached.__init__ import memcached_init
 from sync.sync_grad_memcached import merge_w_b_grads, put_merged_w_b_grads, get_merged_w_b_grads
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from data_loader.LibsvmDataset import DenseDatasetWithLines
 
 # lambda setting
 grad_bucket = "higgs-grads"
@@ -53,7 +53,7 @@ def handler(event, context):
     file = get_object(bucket, key).read().decode('utf-8').split("\n")
     print("read data cost {} s".format(time.time() - start_time))
     parse_start = time.time()
-    dataset = DenseLibsvmDataset2(file, num_features)
+    dataset = DenseDatasetWithLines(file, num_features)
     preprocess_start = time.time()
     print("libsvm operation cost {}s".format(parse_start - preprocess_start))
 

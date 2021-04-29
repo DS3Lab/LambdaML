@@ -5,11 +5,9 @@ import torch
 from torch.utils.data.dataset import Dataset
 
 
-class SparseLibsvmDataset(Dataset):
+class SparseDatasetWithLines(Dataset):
 
-    def __init__(self,
-             lines,
-             max_dim):
+    def __init__(self, lines, max_dim):
         self.max_dim = max_dim
         self.ins_list = []
         self.label_list = []
@@ -52,12 +50,10 @@ class SparseLibsvmDataset(Dataset):
         return len(self.label_list)
 
 
-# input is local file path
-class DenseLibsvmDataset(Dataset):
+# input is a local file path
+class DenseDatasetWithFile(Dataset):
 
-    def __init__(self,
-                 txt_path,
-                 max_dim):
+    def __init__(self, txt_path, max_dim):
         self.max_dim = max_dim
         self.ins_list = []
         self.label_list = []
@@ -95,11 +91,9 @@ class DenseLibsvmDataset(Dataset):
 
 
 # input is lines
-class DenseLibsvmDataset2(Dataset):
+class DenseDatasetWithLines(Dataset):
 
-    def __init__(self,
-                 lines,
-                 max_dim):
+    def __init__(self, lines, max_dim):
         self.max_dim = max_dim
         self.ins_list = []
         self.label_list = []
@@ -142,12 +136,9 @@ class DenseLibsvmDataset2(Dataset):
 
 
 # input is numpy array
-class DenseLibsvmDataset3(Dataset):
+class DenseDatasetWithNP(Dataset):
 
-    def __init__(self,
-                 max_dim,
-                 features,
-                 labels):
+    def __init__(self, max_dim, features, labels):
         self.max_dim = max_dim
         self.ins_list = []
         self.label_list = []
@@ -171,8 +162,8 @@ class DenseLibsvmDataset3(Dataset):
 def main():
     train_file = "../dataset/agaricus_127d_train.libsvm"
     test_file = "../dataset/agaricus_127d_test.libsvm"
-    train_data = SparseLibsvmDataset(train_file, 127)
-    test_data = SparseLibsvmDataset(test_file, 127)
+    train_data = SparseDatasetWithLines(train_file, 127)
+    test_data = SparseDatasetWithLines(test_file, 127)
 
     print(train_data.__getitem__(0)[0])
 

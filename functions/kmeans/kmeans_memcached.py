@@ -10,7 +10,7 @@ from elasticache.Memcached.set_object import hset_object
 from s3.get_object import get_object
 from s3.put_object import put_object
 from elasticache.Memcached.__init__ import memcached_init
-from data_loader.LibsvmDataset import DenseLibsvmDataset2, SparseLibsvmDataset
+from data_loader.LibsvmDataset import DenseDatasetWithLines, SparseDatasetWithLines
 from functions.kmeans.utils import store_centroid_as_numpy, process_centroid, get_new_centroids
 
 # setting
@@ -46,12 +46,12 @@ def handler(event, context):
 
     if dataset_type == "dense":
         # dataset is stored as numpy array
-        dataset = DenseLibsvmDataset2(file, num_features).ins_np
+        dataset = DenseDatasetWithLines(file, num_features).ins_np
         dt = dataset.dtype
         centroid_shape = (num_clusters, dataset.shape[1])
     else:
         # dataset is sparse, stored as sparse tensor
-        dataset = SparseLibsvmDataset(file, num_features)
+        dataset = SparseDatasetWithLines(file, num_features)
         first_entry = dataset.ins_list[0].to_dense().numpy()
         dt = first_entry.dtype
         centroid_shape = (num_clusters, first_entry.shape[1])

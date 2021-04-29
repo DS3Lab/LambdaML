@@ -9,7 +9,7 @@ import logging
 
 sys.path.append("../../")
 
-from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from data_loader.LibsvmDataset import DenseDatasetWithLines
 from torch.multiprocessing import Process
 from model.Kmeans import Kmeans
 
@@ -51,7 +51,7 @@ def run(args):
     file_name = "{}/{}_{}".format(args.root, args.rank, args.world_size)
     train_file = open(file_name, 'r').readlines()
 
-    train_set = DenseLibsvmDataset2(train_file, args.features).ins_np
+    train_set = DenseDatasetWithLines(train_file, args.features).ins_np
     dt = train_set.dtype
     centroid_shape = (args.num_clusters, train_set.shape[1])
     logging.info(f"Loading dataset costs {time.time() - read_start}s")

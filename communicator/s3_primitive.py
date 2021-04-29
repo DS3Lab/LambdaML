@@ -1,4 +1,7 @@
-from storage.storage import S3Storage, RedisStorage, MemcachedStorage
+import urllib
+import numpy as np
+
+from storage.storage import S3Storage
 
 
 def reduce_batch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker_index, postfix):
@@ -16,13 +19,13 @@ def reduce_batch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker
 
     # put object to s3, format of key: workerID_epoch_batch
     key = "{}_{}".format(worker_index, postfix)
-    storage.save(vector.tobytes(), tmp_bucket, key)
+    storage.save(vector.tobytes(), key, tmp_bucket)
 
     # the first worker read and aggregate the corresponding chunk
     if worker_index == 0:
         num_files = 0
         while num_files < num_workers:
-            objects = list_bucket_objects(tmp_bucket)
+            objects = storage.list(tmp_bucket)
             if objects is not None:
                 delete_list = []
                 for obj in objects:
@@ -31,28 +34,31 @@ def reduce_batch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker
                     key_epoch = key_splits[1]
                     key_batch = key_splits[2]
                     if key_epoch == str(curr_epoch) and key_batch == str(curr_batch):
-                        data = get_object(tmp_bucket, file_key).read()
+                        data = storage.load(tmp_bucket, file_key).read()
                         bytes_data = np.frombuffer(data, dtype=vec_dtype)
                         tmp_vec = bytes_data.reshape(vec_shape)
                         merged_vec += tmp_vec
                         num_files += 1
                         delete_list.append(file_key)
-                delete_objects(tmp_bucket, delete_list)
+                storage.delete(delete_list, tmp_bucket)
         # write the merged data back to s3
         merged_file_name = 'merged_' + postfix
-        put_object(merged_bucket, merged_file_name, merged_vec.tobytes())
-        delete_expired_merged_batch(merged_bucket, curr_epoch, curr_batch)
+        storage.save(merged_vec.tobytes(), merged_file_name, merged_bucket)
+        delete_expired_batch(merged_bucket, curr_epoch, curr_batch)
     else:
         merged_file_name = 'merged_' + postfix
-        merged_data = get_object_or_wait(merged_bucket, merged_file_name, 0.1).read()
+        merged_data = storage.load_or_wait(merged_bucket, merged_file_name, 0.1).read()
         merged_vec = np.frombuffer(merged_data, dtype=vec_dtype).reshape(vec_shape)
 
     return merged_vec
 
 
-def reduce_epoch(vector, tmp_bucket, merged_bucket, num_workers, worker_index, postfix):
+def reduce_epoch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker_index, postfix):
+    assert isinstance(storage, S3Storage)
+
     # vector is supposed to be a 1-d numpy array
     vec_shape = vector.shape
+    assert vec_shape[0] == 1
     vec_dtype = vector.dtype
     merged_vec = np.zeros(vec_shape, dtype=vec_dtype)
 
@@ -60,14 +66,13 @@ def reduce_epoch(vector, tmp_bucket, merged_bucket, num_workers, worker_index, p
 
     # put object to s3, format of key: workerID_epoch
     key = "{}_{}".format(worker_index, postfix)
-    #print("put file {} to s3".format(key))
-    put_object(tmp_bucket, key, vector.tobytes())
+    storage.save(vector.tobytes(), key, tmp_bucket)
 
     # the first worker read and aggregate the corresponding chunk
     if worker_index == 0:
         num_files = 0
         while num_files < num_workers:
-            objects = list_bucket_objects(tmp_bucket)
+            objects = storage.list(tmp_bucket)
             if objects is not None:
                 delete_list = []
                 for obj in objects:
@@ -75,27 +80,27 @@ def reduce_epoch(vector, tmp_bucket, merged_bucket, num_workers, worker_index, p
                     key_splits = file_key.split("_")
                     key_epoch = key_splits[1]
                     if key_epoch == str(curr_epoch):
-                        data = get_object(tmp_bucket, file_key).read()
+                        data = storage.load(tmp_bucket, file_key).read()
                         bytes_data = np.frombuffer(data, dtype=vec_dtype)
                         tmp_vec = bytes_data.reshape(vec_shape)
                         merged_vec += tmp_vec
                         num_files += 1
                         delete_list.append(file_key)
-                delete_objects(tmp_bucket, delete_list)
+                storage.delete(delete_list, tmp_bucket)
         # write the merged data back to s3
-        put_object(merged_bucket, 'merged_' + postfix, merged_vec.tobytes())
-        delete_expired_merged_epoch(merged_bucket, curr_epoch)
+        storage.save(merged_vec.tobytes(), 'merged_' + postfix, merged_bucket)
+        delete_expired_epoch(merged_bucket, curr_epoch)
     else:
         merged_file_name = 'merged_' + postfix
-        merged_data = get_object_or_wait(merged_bucket,merged_file_name, 0.1).read()
+        merged_data = storage.load_or_wait(merged_bucket, merged_file_name, 0.1).read()
         merged_vec = np.frombuffer(merged_data, dtype=vec_dtype).reshape(vec_shape)
 
     return merged_vec
 
 
 # delete the merged values of the *current or older* steps
-def delete_expired_merged_batch(bucket_name, cur_epoch, cur_batch):
-    objects = list_bucket_objects(bucket_name)
+def delete_expired_batch(storage, bucket_name, cur_epoch, cur_batch):
+    objects = storage.list(bucket_name)
     if objects is not None:
         file_names = []
         for obj in objects:
@@ -106,12 +111,11 @@ def delete_expired_merged_batch(bucket_name, cur_epoch, cur_batch):
             if key_epoch < cur_epoch or (key_epoch == cur_epoch and key_batch < cur_batch):
                 file_names.append(file_key)
         if len(file_names) >= 1:
-            #print("delete files {} in bucket {}".format(file_names, bucket_name))
-            delete_objects(bucket_name, file_names)
+            storage.delete(file_names, bucket_name)
 
 
-def delete_expired_merged_epoch(bucket_name, cur_epoch):
-    objects = list_bucket_objects(bucket_name)
+def delete_expired_epoch(storage, bucket_name, cur_epoch):
+    objects = storage.list(bucket_name)
     if objects is not None:
         file_names = []
         for obj in objects:
@@ -121,74 +125,386 @@ def delete_expired_merged_epoch(bucket_name, cur_epoch):
             if key_epoch < cur_epoch:
                 file_names.append(file_key)
         if len(file_names) >= 1:
-            #print("delete files {} in bucket {}".format(file_names, bucket_name))
-            delete_objects(bucket_name, file_names)
+            storage.delete(file_names, bucket_name)
 
 
-def merge_all_workers(bucket_name, num_workers, prefix):
+def reduce_scatter_batch(storage, vector, tmp_bucket, merged_bucket, num_workers, my_rank, postfix):
+    assert isinstance(storage, S3Storage)
+
+    # vector is supposed to be a 1-d numpy array
+    num_all_values = vector.size
+    num_values_per_worker = num_all_values // num_workers
+    residue = num_all_values % num_workers
+
+    postfix_splits = postfix.split("_")
+    curr_epoch = postfix_splits[0]
+    curr_batch = postfix_splits[1]
+
+    my_offset = (num_values_per_worker * my_rank) + min(residue, my_rank)
+    my_length = num_values_per_worker + (1 if my_rank < residue else 0)
+    my_chunk = vector[my_offset: my_offset + my_length]
+
+    # write partitioned vector to the shared storage, except the chunk charged by myself
+    for i in range(num_workers):
+        if i != my_rank:
+            offset = (num_values_per_worker * i) + min(residue, i)
+            length = num_values_per_worker + (1 if i < residue else 0)
+            # indicating the chunk number and which worker it comes from
+            key = "{}_{}".format(i, my_rank)
+
+            # format of key in tmp-bucket: chunkID_workerID_epoch_batch
+            storage.save(vector[offset: offset + length].tobytes(), key + '_' + postfix, tmp_bucket)
+
+    # read and aggregate the corresponding chunk
     num_files = 0
-    # merged_value = np.zeros(dshape, dtype=dtype)
-    merged_value = []
-
-    while num_files < num_workers:
-        objects = list_bucket_objects(bucket_name)
+    while num_files < num_workers - 1:
+        objects = storage.list(tmp_bucket)
         if objects is not None:
             for obj in objects:
                 file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
-                data_bytes = get_object(bucket_name, file_key).read()
-                data = pickle.loads(data_bytes)
-
-                for i in range(len(data)):
-                    if num_files == 0:
-                        merged_value.append(np.zeros(data[i].shape, dtype=data[i].dtype))
-                    merged_value[i] = merged_value[i] + data[i]
-
-                num_files = num_files + 1
-                delete_object(bucket_name, file_key)
-
-    # average weights
-    if prefix == 'w_':
-        merged_value = [value / float(num_workers) for value in merged_value]
-
-    return merged_value
-
-
-def put_merged(bucket_name, merged_value, prefix, file_postfix):
-    # print('put merged weight {} to bucket {}'.format(w_prefix + file_postfix, bucket_name))
-    put_object(bucket_name, prefix + file_postfix, pickle.dumps(merged_value))
-
-
-def get_merged(bucket_name, prefix, file_postfix):
-    # print('get merged weight {} in bucket {}'.format(w_prefix + file_postfix, bucket_name))
-    merged_value = get_object_or_wait(bucket_name, prefix + file_postfix, 0.1).read()
-    merged_value_np = pickle.loads(merged_value)
-    # merged_value_np = np.frombuffer(merged_value, dtype=dtype).reshape(dshape)
-
-    return merged_value_np
-
-
-def delete_expired(bucket_name, cur_epoch, cur_batch, prefix):
-    objects = list_bucket_objects(bucket_name)
-    if objects is not None:
-        for obj in objects:
-            file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
-            if file_key.startswith(prefix):
                 key_splits = file_key.split("_")
-                key_batch = int(key_splits[-1])
-                key_epoch = int(key_splits[-2])
-                if key_epoch < cur_epoch or (key_epoch == cur_epoch and key_batch < cur_batch):
-                    print("delete object {} in bucket {}".format(file_key, bucket_name))
-                    delete_object(bucket_name, file_key)
+
+                # if it's the chunk I care and it is from the current step
+                # format of key in tmp-bucket: chunkID_workerID_epoch_batch
+                if key_splits[0] == str(my_rank) and key_splits[2] == curr_epoch and key_splits[3] == curr_batch:
+                    data = storage.load(tmp_bucket, file_key).read()
+                    bytes_data = np.frombuffer(data, dtype=vector.dtype)
+                    my_chunk = my_chunk + bytes_data
+                    num_files += 1
+                    storage.delete(file_key, tmp_bucket)
+
+    # write the aggregated chunk back
+    # key format in merged_bucket: chunkID_epoch_batch
+    storage.save(my_chunk.tobytes(), str(my_rank) + '_' + postfix, merged_bucket)
+
+    # read other aggregated chunks
+    merged_value = dict()
+    merged_value[my_rank] = my_chunk
+
+    num_merged_files = 0
+    already_read_files = []
+
+    while num_merged_files < num_workers - 1:
+        objects = storage.list(merged_bucket)
+        if objects is not None:
+            for obj in objects:
+                file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                key_splits = file_key.split("_")
+                # key format in merged_bucket: chunkID_epoch_batch
+                # if not file_key.startswith(str(my_rank)) and file_key not in already_read:
+                # key_splits = file_key.split("_")
+                if key_splits[0] != str(my_rank) and key_splits[1] == curr_epoch and \
+                        key_splits[2] == curr_batch and file_key not in already_read_files:
+                    data = storage.load(file_key, merged_bucket).read()
+                    bytes_data = np.frombuffer(data, dtype=vector.dtype)
+                    merged_value[int(key_splits[0])] = bytes_data
+                    already_read_files.append(file_key)
+                    num_merged_files += 1
+
+    # reconstruct the whole vector
+    result = merged_value[0]
+    for k in range(1, num_workers):
+        result = np.concatenate((result, merged_value[k]))
+
+    return result
 
 
-def clear_bucket(bucket_name):
-    objects = list_bucket_objects(bucket_name)
-    if objects is not None:
-        file_names = []
-        for obj in objects:
-            file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
-            file_names.append(file_key)
-        if len(file_names) > 1:
-            print("delete files {} in bucket {}".format(file_names, bucket_name))
-            delete_objects(bucket_name, file_names)
-    return True
+def reduce_scatter_batch_multi_bucket(storage, vector, tmp_bucket_prefix, merged_bucket_prefix,
+                                      num_buckets, num_workers, my_rank, postfix):
+    assert isinstance(storage, S3Storage)
+
+    # vector is supposed to be a 1-d numpy array
+    num_all_values = vector.size
+    num_values_per_worker = num_all_values // num_workers
+    residue = num_all_values % num_workers
+
+    postfix_splits = postfix.split("_")
+    curr_epoch = postfix.split("_")[0]
+    curr_batch = postfix.split("_")[1]
+
+    my_offset = (num_values_per_worker * my_rank) + min(residue, my_rank)
+    my_length = num_values_per_worker + (1 if my_rank < residue else 0)
+    my_chunk = vector[my_offset: my_offset + my_length]
+
+    # write partitioned vector to the shared memory, except the chunk charged by myself
+    for i in range(num_workers):
+        if i != my_rank:
+            offset = (num_values_per_worker * i) + min(residue, i)
+            length = num_values_per_worker + (1 if i < residue else 0)
+            # indicating the chunk number and which worker it comes from
+            key = "{}_{}".format(i, my_rank)
+
+            tmp_bucket_ind = i % num_buckets
+            tmp_bucket = "{}-{}".format(tmp_bucket_prefix, tmp_bucket_ind)
+
+            # format of key in tmp-bucket: chunkID_workerID_epoch_batch
+            storage.save(vector[offset: offset + length].tobytes(), key + '_' + postfix, tmp_bucket)
+
+    # read and aggregate the corresponding chunk
+    num_files = 0
+    tmp_bucket_ind = my_rank % num_buckets
+    tmp_bucket = "{}-{}".format(tmp_bucket_prefix, tmp_bucket_ind)
+    print("worker [{}] read and aggregate the corresponding chunks in bucket {}"
+          .format(my_rank, tmp_bucket))
+
+    while num_files < num_workers - 1:
+        objects = storage.list(tmp_bucket)
+        if objects is not None:
+            for obj in objects:
+                file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                key_splits = file_key.split("_")
+
+                # if it's the chunk I care and it is from the current step
+                # format of key in tmp-bucket: chunkID_workerID_epoch_batch
+                if key_splits[0] == str(my_rank) and key_splits[2] == curr_epoch and key_splits[3] == curr_batch:
+                    data = storage.load(file_key, tmp_bucket).read()
+                    bytes_data = np.frombuffer(data, dtype=vector.dtype)
+                    my_chunk = my_chunk + bytes_data
+                    num_files += 1
+                    storage.delete(file_key, tmp_bucket)
+
+    merged_bucket_ind = my_rank % num_buckets
+    my_merged_bucket = "{}-{}".format(merged_bucket_prefix, merged_bucket_ind)
+    # write the aggregated chunk back
+    # key format in merged_bucket: chunkID_epoch_batch
+    storage.save(my_chunk.tobytes(), str(my_rank) + '_' + postfix, my_merged_bucket)
+
+    # read other aggregated chunks
+    merged_value = {my_rank: my_chunk}
+
+    bucket_num_objs = []
+    if num_workers % num_buckets == 0:
+        bucket_num_objs = [num_workers / num_buckets for _ in range(num_buckets)]
+    else:
+        for i in range(num_buckets % num_buckets):
+            num_buckets.append(num_workers / num_buckets + 1)
+        for i in range(num_buckets % num_buckets, num_buckets):
+            num_buckets.append(num_workers / num_buckets)   # check boundary
+    # do not count responsible chunk
+    bucket_num_objs[my_rank % num_buckets] -= 1
+    print("bucket num objs = {}".format(bucket_num_objs))
+
+    num_merged_files = 0
+    already_read_files = []
+    bucket_num_merged = [0 for _ in range(num_buckets)]
+
+    while num_merged_files < num_workers - 1:
+        for i in range(num_buckets):
+            if bucket_num_merged[i] < bucket_num_objs[i]:
+                merged_bucket = "{}-{}".format(merged_bucket_prefix, i)
+                objects = storage.list(merged_bucket)
+                if objects is not None:
+                    for obj in objects:
+                        file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                        key_splits = file_key.split("_")
+                        # key format in merged_bucket: chunkID_epoch_batch
+                        # if not file_key.startswith(str(my_rank)) and file_key not in already_read:
+                        if key_splits[0] != str(my_rank) and key_splits[1] == curr_epoch \
+                                and key_splits[2] == curr_batch and file_key not in already_read_files:
+                            data = storage.load(file_key, merged_bucket).read()
+                            bytes_data = np.frombuffer(data, dtype=vector.dtype)
+
+                            merged_value[int(key_splits[0])] = bytes_data
+
+                            already_read_files.append(file_key)
+                            bucket_num_merged[i] += 1
+                            num_merged_files += 1
+
+    # reconstruct the whole vector
+    result = merged_value[0]
+    for k in range(1, num_workers):
+        result = np.concatenate((result, merged_value[k]))
+
+    return result
+
+
+def reduce_scatter_epoch(storage, vector, tmp_bucket, merged_bucket, num_workers, my_rank, postfix):
+    assert isinstance(storage, S3Storage)
+
+    # vector is supposed to be a 1-d numpy array
+    num_all_values = vector.size
+    num_values_per_worker = num_all_values // num_workers
+    residue = num_all_values % num_workers
+
+    cur_epoch = int(postfix)
+
+    my_offset = (num_values_per_worker * my_rank) + min(residue, my_rank)
+    my_length = num_values_per_worker + (1 if my_rank < residue else 0)
+    my_chunk = vector[my_offset: my_offset + my_length]
+
+    # write partitioned vector to the shared memory, except the chunk charged by myself
+    for i in range(num_workers):
+        if i != my_rank:
+            offset = (num_values_per_worker * i) + min(residue, i)
+            length = num_values_per_worker + (1 if i < residue else 0)
+            # indicating the chunk number and which worker it comes from
+            key = "{}_{}".format(i, my_rank)
+            # format of key in tmp-bucket: chunkID_workerID_epoch
+            storage.save(vector[offset: offset + length].tobytes(), key + '_' + postfix, tmp_bucket)
+
+    # read and aggregate the corresponding chunk
+    num_files = 0
+
+    while num_files < num_workers - 1:
+        objects = storage.list(tmp_bucket)
+
+        if objects is not None:
+            for obj in objects:
+                file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                key_splits = file_key.split("_")
+
+                # if it's the chunk I care and it is from the current step
+                # format of key in tmp-bucket: chunkID_workerID_epoch_batch
+                if key_splits[0] == str(my_rank) and key_splits[2] == str(cur_epoch):
+                    data = storage.load(file_key, tmp_bucket).read()
+                    bytes_data = np.frombuffer(data, dtype=vector.dtype)
+                    my_chunk = my_chunk + bytes_data
+                    num_files += 1
+                    storage.delete(file_key, tmp_bucket)
+
+    # write the aggregated chunk back
+    # key format in merged_bucket: chunkID_epoch_batch
+    storage.save(my_chunk.tobytes(), str(my_rank) + '_' + postfix, merged_bucket)
+
+    # read other aggregated chunks
+    merged_value = dict()
+    merged_value[my_rank] = my_chunk
+
+    num_merged_files = 0
+    already_read_files = []
+
+    while num_merged_files < num_workers - 1:
+        objects = storage.list(merged_bucket)
+
+        if objects is not None:
+            for obj in objects:
+                file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                key_splits = file_key.split("_")
+
+                # key format in merged_bucket: chunkID_epoch
+                # if not file_key.startswith(str(my_rank)) and file_key not in already_read:
+                if key_splits[0] != str(my_rank) and key_splits[1] == str(cur_epoch) \
+                        and file_key not in already_read_files:
+
+                    data = storage.load(file_key, merged_bucket).read()
+                    bytes_data = np.frombuffer(data, dtype=vector.dtype)
+
+                    merged_value[int(key_splits[0])] = bytes_data
+
+                    already_read_files.append(file_key)
+                    num_merged_files += 1
+
+    # reconstruct the whole vector
+    result = merged_value[0]
+    for k in range(1, num_workers):
+        result = np.concatenate((result, merged_value[k]))
+
+    return result
+
+
+def reduce_scatter_epoch_multi_bucket(storage, vector, tmp_bucket_prefix, merged_bucket_prefix,
+                                      num_buckets, num_workers, my_rank, postfix):
+    assert isinstance(storage, S3Storage)
+
+    # vector is supposed to be a 1-d numpy array
+    num_all_values = vector.size
+    num_values_per_worker = num_all_values // num_workers
+    residue = num_all_values % num_workers
+
+    curr_epoch = postfix
+
+    my_offset = (num_values_per_worker * my_rank) + min(residue, my_rank)
+    my_length = num_values_per_worker + (1 if my_rank < residue else 0)
+    my_chunk = vector[my_offset: my_offset + my_length]
+
+    # write partitioned vector to the shared memory, except the chunk charged by myself
+    for i in range(num_workers):
+        if i != my_rank:
+            offset = (num_values_per_worker * i) + min(residue, i)
+            length = num_values_per_worker + (1 if i < residue else 0)
+            # indicating the chunk number and which worker it comes from
+            key = "{}_{}".format(i, my_rank)
+
+            tmp_bucket_ind = i % num_buckets
+            tmp_bucket = "{}-{}".format(tmp_bucket_prefix, tmp_bucket_ind)
+
+            # format of key in tmp-bucket: chunkID_workerID_epoch_batch
+            storage.save(vector[offset: offset + length].tobytes(), key + '_' + postfix, tmp_bucket)
+
+    # read and aggregate the corresponding chunk
+    num_files = 0
+    tmp_bucket_ind = my_rank % num_buckets
+    tmp_bucket = "{}-{}".format(tmp_bucket_prefix, tmp_bucket_ind)
+    print("worker [{}] read and aggregate the corresponding chunks in bucket {}"
+          .format(my_rank, tmp_bucket))
+
+    while num_files < num_workers - 1:
+        objects = storage.list(tmp_bucket)
+
+        if objects is not None:
+            for obj in objects:
+                file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                key_splits = file_key.split("_")
+
+                # if it's the chunk I care and it is from the current step
+                # format of key in tmp-bucket: chunkID_workerID_epoch_batch
+                if key_splits[0] == str(my_rank) and key_splits[2] == str(curr_epoch):
+                    data = storage.load(file_key, tmp_bucket).read()
+                    bytes_data = np.frombuffer(data, dtype=vector.dtype)
+                    my_chunk = my_chunk + bytes_data
+                    num_files += 1
+                    storage.delete(file_key, tmp_bucket)
+
+    merged_bucket_ind = my_rank % num_buckets
+    merged_bucket = "{}-{}".format(merged_bucket_prefix, merged_bucket_ind)
+    # write the aggregated chunk back
+    # key format in merged_bucket: chunkID_epoch_batch
+    storage.save(my_chunk.tobytes(), str(my_rank) + '_' + postfix, merged_bucket)
+
+    # read other aggregated chunks
+    merged_value = {my_rank: my_chunk}
+
+    bucket_num_objs = []
+    if num_workers % num_buckets == 0:
+        bucket_num_objs = [num_workers / num_buckets for _ in range(num_buckets)]
+    else:
+        for i in range(num_buckets % num_buckets):
+            num_buckets.append(num_workers / num_buckets + 1)
+        for i in range(num_buckets % num_buckets, num_buckets):
+            num_buckets.append(num_workers / num_buckets)  # check boundary
+    # do not count responsible chunk
+    bucket_num_objs[my_rank % num_buckets] -= 1
+
+    num_merged_files = 0
+    already_read_files = []
+    bucket_num_merged = [0 for _ in range(num_buckets)]
+
+    while num_merged_files < num_workers - 1:
+        for i in range(num_buckets):
+            if bucket_num_merged[i] < bucket_num_objs[i]:
+                merged_bucket = "{}-{}".format(merged_bucket_prefix, i)
+                objects = storage.list(merged_bucket)
+
+                if objects is not None:
+                    for obj in objects:
+                        file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
+                        key_splits = file_key.split("_")
+
+                        # key format in merged_bucket: chunkID_epoch
+                        # if not file_key.startswith(str(myrank)) and file_key not in already_read:
+                        if key_splits[0] != str(my_rank) and key_splits[1] == str(curr_epoch) \
+                                and file_key not in already_read_files:
+                            data = storage.load(file_key, merged_bucket).read()
+                            bytes_data = np.frombuffer(data, dtype=vector.dtype)
+
+                            merged_value[int(key_splits[0])] = bytes_data
+                            already_read_files.append(file_key)
+                            bucket_num_merged[i] += 1
+                            num_merged_files += 1
+
+    # reconstruct the whole vector
+    result = merged_value[0]
+    for k in range(1, num_workers):
+        result = np.concatenate((result, merged_value[k]))
+
+    return result

@@ -11,7 +11,7 @@ sys.path.append("../../")
 
 from pytorch_model.sparse_kmeans import SparseKmeans
 from torch.multiprocessing import Process
-from data_loader.LibsvmDataset import SparseLibsvmDataset
+from data_loader.LibsvmDataset import SparseDatasetWithLines
 
 
 def dist_is_initialized():
@@ -51,7 +51,7 @@ def run(args):
     file_name = "{}/{}_{}".format(args.root, args.rank, args.world_size)
     train_file = open(file_name, 'r').readlines()
 
-    train_set = SparseLibsvmDataset(train_file, args.features)
+    train_set = SparseDatasetWithLines(train_file, args.features)
     train_set = [t[0] for t in train_set]
     logging.info(f"Loading dataset costs {time.time() - read_start}s")
 

@@ -11,9 +11,9 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from data_loader.LibsvmDataset import DenseLibsvmDataset2, DenseLibsvmDataset3
+from data_loader.LibsvmDataset import DenseDatasetWithLines, DenseDatasetWithNP
 from data_loader.YFCCLibsvmDataset import DenseLibsvmDataset
-from data_loader.LibsvmDataset import SparseLibsvmDataset
+from data_loader.LibsvmDataset import SparseDatasetWithLines
 from data_loader.cifar10_dataset import CIFAR10_subset
 
 
@@ -239,7 +239,7 @@ def partition_vgg16_cifar100_fc(batch_size, features_path, labels_path, validati
                              .format(row_features, row_labels))
 
     parse_start = time.time()
-    dataset = DenseLibsvmDataset3(col_features, features_matrix, labels_matrix)
+    dataset = DenseDatasetWithNP(col_features, features_matrix, labels_matrix)
     print("parse data cost {} s".format(time.time() - parse_start))
 
     preprocess_start = time.time()
@@ -268,7 +268,7 @@ def partition_vgg16_cifar100_fc(batch_size, features_path, labels_path, validati
 def partition_higgs(batch_size, file_name, validation_ratio):
     parse_start = time.time()
     f = open(file_name).readlines()
-    dataset = DenseLibsvmDataset2(f, 30)
+    dataset = DenseDatasetWithLines(f, 30)
     print("parse data cost {} s".format(time.time() - parse_start))
 
     preprocess_start = time.time()
@@ -338,8 +338,8 @@ def partition_yfcc100m(file_list, n_features, pos_tag, batch_size, validation_ra
 
 
 def partition_agaricus(batch_size, train_file, test_file):
-    train_dataset = SparseLibsvmDataset(train_file, 127)
-    test_dataset = SparseLibsvmDataset(test_file, 127)
+    train_dataset = SparseDatasetWithLines(train_file, 127)
+    test_dataset = SparseDatasetWithLines(test_file, 127)
 
     size = dist.get_world_size()
     bsz = 1 if batch_size == 1 else int(batch_size / float(size))
@@ -354,7 +354,7 @@ def partition_agaricus(batch_size, train_file, test_file):
 
 
 def partition_sparse(file, num_feature):
-    train_dataset = SparseLibsvmDataset(file, num_feature)
+    train_dataset = SparseDatasetWithLines(file, num_feature)
     size = 1
     rank = 0
     if dist_is_initialized():

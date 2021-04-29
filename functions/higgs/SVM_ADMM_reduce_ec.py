@@ -12,7 +12,7 @@ from elasticache.Memcached.get_object import hget_object
 from sync.sync_grad_memcached import reduce_epoch, clear_bucket
 
 from model.SVM import SVM
-from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from data_loader.LibsvmDataset import DenseDatasetWithLines
 
 # lambda setting
 # file_bucket = "higgs-libsvm"
@@ -102,7 +102,7 @@ def handler(event, context):
     # file = open(file_path).readlines()
 
     parse_start = time.time()
-    dataset = DenseLibsvmDataset2(file, num_features)
+    dataset = DenseDatasetWithLines(file, num_features)
     print("parse data cost {} s".format(time.time() - parse_start))
 
     preprocess_start = time.time()

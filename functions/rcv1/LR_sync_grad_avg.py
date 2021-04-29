@@ -13,7 +13,7 @@ from s3.put_object import put_object
 from sync.sync_grad import *
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import SparseLibsvmDataset
+from data_loader.LibsvmDataset import SparseDatasetWithLines
 from sync.sync_meta import SyncMeta
 
 # lambda setting
@@ -64,7 +64,7 @@ def handler(event, context):
     print("read data cost {} s".format(time.time() - start_time))
 
     parse_start = time.time()
-    dataset = SparseLibsvmDataset(file, num_features)
+    dataset = SparseDatasetWithLines(file, num_features)
     print("parse data cost {} s".format(time.time() - parse_start))
 
     preprocess_start = time.time()

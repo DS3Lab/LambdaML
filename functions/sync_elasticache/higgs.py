@@ -3,7 +3,7 @@ import urllib.parse
 import numpy as np
 import pickle
 
-from data_loader.LibsvmDataset import DenseLibsvmDataset
+from data_loader.LibsvmDataset import DenseDatasetWithFile
 
 if __name__=="__main__":
     startTs = time.time()

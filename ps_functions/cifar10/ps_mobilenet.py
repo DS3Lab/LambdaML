@@ -9,7 +9,7 @@ from torch.nn import Parameter
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from pytorch_model.cifar10 import MobileNet
-from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from data_loader.LibsvmDataset import DenseDatasetWithLines
 
 from s3.download_file import download_file
 

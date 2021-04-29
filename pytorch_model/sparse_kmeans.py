@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import time
 
-from data_loader.LibsvmDataset import SparseLibsvmDataset
+from data_loader.LibsvmDataset import SparseDatasetWithLines
 
 
 def _l2_dist_sq(x1, x2):
@@ -83,8 +83,8 @@ if __name__ == "__main__":
     train_file = "../dataset/agaricus_127d_train.libsvm"
     test_file = "../dataset/agaricus_127d_test.libsvm"
     dim = 127
-    train_data = SparseLibsvmDataset(train_file, dim)
-    test_data = SparseLibsvmDataset(test_file, dim)
+    train_data = SparseDatasetWithLines(train_file, dim)
+    test_data = SparseDatasetWithLines(test_file, dim)
     nr_cluster = 10
     centroids = train_data.ins_list[:nr_cluster]
     kmeans_model = SparseKmeans(train_data, centroids, dim, nr_cluster)

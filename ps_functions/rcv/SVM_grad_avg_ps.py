@@ -7,7 +7,7 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from data_loader.LibsvmDataset import DenseLibsvmDataset2
+from data_loader.LibsvmDataset import DenseDatasetWithLines
 from pytorch_model.sparse_svm import *
 from pytorch_model.sparse_lr import *
 from sync.sync_grad import *
@@ -50,7 +50,7 @@ def handler(event, context):
     print("read data cost {} s".format(time.time() - startTs))
 
     parse_start = time.time()
-    dataset = SparseLibsvmDataset(file, num_features)
+    dataset = SparseDatasetWithLines(file, num_features)
     print("parse data cost {} s".format(time.time() - parse_start))
 
     preprocess_start = time.time()

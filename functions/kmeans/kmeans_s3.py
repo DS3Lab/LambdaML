@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import time
 
-from data_loader.LibsvmDataset import DenseLibsvmDataset2, SparseLibsvmDataset
+from data_loader.LibsvmDataset import DenseDatasetWithLines, SparseDatasetWithLines
 from s3.get_object import get_object_or_wait, get_object
 from s3.put_object import put_object
 from sync.sync_centroids import compute_average_centroids
@@ -40,12 +40,12 @@ def lambda_handler(event, context):
     logger.info(f"Getting object from s3 takes {s3_end - event_start}s")
     if dataset_type == "dense":
         # dataset is stored as numpy array
-        dataset = DenseLibsvmDataset2(file, num_features).ins_np
+        dataset = DenseDatasetWithLines(file, num_features).ins_np
         dt = dataset.dtype
         centroid_shape = (num_clusters, dataset.shape[1])
     else:
         # dataset is sparse, stored as sparse tensor
-        dataset = SparseLibsvmDataset(file, num_features)
+        dataset = SparseDatasetWithLines(file, num_features)
         first_entry = dataset.ins_list[0].to_dense().numpy()
         dt = first_entry.dtype
         centroid_shape = (num_clusters, first_entry.shape[1])

@@ -12,7 +12,7 @@ from s3.clear_bucket import clear_bucket
 from sync.sync_reduce import reduce_epoch, delete_expired_merged_epoch
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseLibsvmDataset3
+from data_loader.LibsvmDataset import DenseDatasetWithNP
 
 # lambda setting
 local_dir = "/tmp/"
@@ -112,7 +112,7 @@ def handler(event, context):
                              .format(row_features, row_labels))
 
     parse_start = time.time()
-    dataset = DenseLibsvmDataset3(col_features, features_matrix, labels_matrix)
+    dataset = DenseDatasetWithNP(col_features, features_matrix, labels_matrix)
     print("parse data cost {} s".format(time.time() - parse_start))
 
     preprocess_start = time.time()
