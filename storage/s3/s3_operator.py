@@ -1,17 +1,16 @@
 import urllib
-
 import logging
 import time
 import boto3
 from botocore.exceptions import ClientError
 
 
-def get_client():
+def _get_client():
     client = boto3.client('s3')
     return client
 
 
-def list_bucket_objects(s3_client, bucket_name):
+def _list_bucket_objects(s3_client, bucket_name):
     """List the objects in an Amazon S3 bucket
 
     :param s3_client: s3 client object
@@ -23,6 +22,7 @@ def list_bucket_objects(s3_client, bucket_name):
     try:
         response = s3_client.list_objects_v2(Bucket=bucket_name)
     except ClientError as e:
+        # TODO(milos) we should have a different response if bucket is not found vs if something else went wrong
         # AllAccessDisabled error == bucket not found
         logging.error(e)
         return None
@@ -34,7 +34,7 @@ def list_bucket_objects(s3_client, bucket_name):
     return None
 
 
-def clear_bucket(s3_client, bucket_name):
+def _clear_bucket(s3_client, bucket_name):
     """Clear the objects in an Amazon S3 bucket
 
     :param s3_client: s3 client object
@@ -42,18 +42,18 @@ def clear_bucket(s3_client, bucket_name):
     :return: True if successful. If error, return None.
     """
 
-    objects = list_bucket_objects(s3_client, bucket_name)
+    objects = _list_bucket_objects(s3_client, bucket_name)
     if objects is not None:
         file_names = []
         for obj in objects:
             file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
             file_names.append(file_key)
         if len(file_names) >= 1:
-            delete_objects(s3_client, bucket_name, file_names)
+            _delete_objects(s3_client, bucket_name, file_names)
     return True
 
 
-def delete_object(s3_client, bucket_name, object_name):
+def _delete_object(s3_client, bucket_name, object_name):
     """Delete an object from an S3 bucket
 
     :param s3_client: s3 client object
@@ -70,7 +70,7 @@ def delete_object(s3_client, bucket_name, object_name):
 
 
 # Delete multiple objects from an Amazon S3 bucket
-def delete_objects(s3_client, bucket_name, object_names):
+def _delete_objects(s3_client, bucket_name, object_names):
     """Delete multiple objects from an Amazon S3 bucket
 
     :param s3_client: s3 client object
@@ -91,7 +91,7 @@ def delete_objects(s3_client, bucket_name, object_names):
 
 
 # Fetch an file from an Amazon S3 bucket to local path
-def download_file(s3_client, bucket_name, object_name, local_path):
+def _download_file(s3_client, bucket_name, object_name, local_path):
     """Fetch an file to an Amazon S3 bucket to local path
     The src_data argument must be of type bytes or a string that references a file specification.
 
@@ -113,7 +113,7 @@ def download_file(s3_client, bucket_name, object_name, local_path):
     return True
 
 
-def upload_file(s3_client, bucket_name, object_name, local_path):
+def _upload_file(s3_client, bucket_name, object_name, local_path):
     """Add a local file to an Amazon S3 bucket
 
     The src_data argument must be of type bytes or a string that references a file specification.
@@ -136,7 +136,7 @@ def upload_file(s3_client, bucket_name, object_name, local_path):
     return True
 
 
-def get_object(s3_client, bucket_name, object_name):
+def _get_object(s3_client, bucket_name, object_name):
     """Retrieve an object from an Amazon S3 bucket
 
     :param s3_client: s3 client object
@@ -148,14 +148,16 @@ def get_object(s3_client, bucket_name, object_name):
         response = s3_client.get_object(Bucket=bucket_name, Key=object_name)
     except ClientError as e:
         # AllAccessDisabled error == bucket or object not found
+        # TODO(milos) I think the exception does not get caught if the object does  not exist
         logging.error(e)
         return None
     # Return an open StreamingBody object
+    # TODO(milos) why do we return this weird iterator, is there a better way to do this?
     return response['Body']
 
 
 # Retrieve an object from an Amazon S3 bucket, or wait if not exist,
-def get_object_or_wait(s3_client, bucket_name, object_name, sleep_time, time_out=60):
+def _get_object_or_wait(s3_client, bucket_name, object_name, sleep_time, time_out=60):
     """Retrieve an object from an Amazon S3 bucket, or wait if not exist,
 
     :param s3_client: s3 client object
@@ -167,6 +169,7 @@ def get_object_or_wait(s3_client, bucket_name, object_name, sleep_time, time_out
     """
     start_time = time.time()
     while True:
+        # TODO(milos) check how is this timeout value set
         if time.time() - start_time > time_out:
             return None
         try:
@@ -178,7 +181,7 @@ def get_object_or_wait(s3_client, bucket_name, object_name, sleep_time, time_out
             time.sleep(sleep_time)
 
 
-def put_object(s3_client, bucket_name, object_name, src_data):
+def _put_object(s3_client, bucket_name, object_name, src_data):
     """Add an object to an Amazon S3 bucket
     The src_data argument must be of type bytes or a string that references a file specification.
 
@@ -216,4 +219,9 @@ def put_object(s3_client, bucket_name, object_name, src_data):
             object_data.close()
     return True
 
+# TODO(milos) implement bucket creation and expose it to the user
+def _create_bucket(s3_client, bucket_name):
+    pass
 
+def _delete_bucket(s3_client, bucket_name):
+    pass
