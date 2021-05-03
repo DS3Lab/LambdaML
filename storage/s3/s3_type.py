@@ -1,3 +1,4 @@
+# NOTE(milos) This is deprecated, we should switch to S3Bucket everywhere
 from storage.s3 import s3_operator
 from storage.base import BaseStorage
 

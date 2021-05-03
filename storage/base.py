@@ -1,32 +1,32 @@
 from abc import ABC, abstractmethod
+from typing import Union, Iterator, List
 
 class BaseStorage(ABC):
 
-    # TODO(milos) maybe also timeout should be here, since we require derived class to have load_or_wait
-    def __init__(self, __name, **kwargs):
-        # TODO(milos) maybe rename this to type and don't pass it? But maybe it's completely useless, and delete it
-        self.name = __name
+    @abstractmethod
+    def __init__(self) -> None:
+        """TODO(milos) documentation"""
 
     @abstractmethod
-    def save(self, src_data, key, **kwargs):
-        return
+    def save(self, src_data: Union[str, bytes], key: str) -> bool:
+        """TODO(milos) documentation"""
 
     @abstractmethod
-    def load(self, key, **kwargs):
-        return
+    def load(self, key: str) -> Iterator[bytes]:
+        """TODO(milos) documentation"""
 
     @abstractmethod
-    def load_or_wait(self, key, **kwargs):
-        return
+    def load_or_wait(self, key: str) -> Iterator[bytes]:
+        """TODO(milos) documentation"""
 
     @abstractmethod
-    def delete(self, key, **kwargs):
-        return
+    def delete(self, key: Union[str, List[str]]) -> bool:
+        """TODO(milos) documentation"""
 
     @abstractmethod
-    def clear(self, **kwargs):
-        return
+    def clear(self) -> bool:
+        """TODO(milos) documentation"""
 
     @abstractmethod
-    def list(self, **kwargs):
-        return
+    def list(self) -> List[Iterator[bytes]]:
+        """TODO(milos) documentation"""

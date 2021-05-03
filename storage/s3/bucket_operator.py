@@ -1,7 +1,7 @@
-# NOTE(milos) This is deprecated, we should switch to S3Bucket everywhere
 import urllib
 import logging
 import time
+import sys
 import boto3
 from botocore.exceptions import ClientError
 
@@ -14,7 +14,6 @@ def _get_client():
 def _list_bucket_objects(s3_client, bucket_name):
     """List the objects in an Amazon S3 bucket
 
-    :param s3_client: s3 client object
     :param bucket_name: string
     :return: List of bucket objects. If error, return None.
     """
@@ -38,7 +37,6 @@ def _list_bucket_objects(s3_client, bucket_name):
 def _clear_bucket(s3_client, bucket_name):
     """Clear the objects in an Amazon S3 bucket
 
-    :param s3_client: s3 client object
     :param bucket_name: string
     :return: True if successful. If error, return None.
     """
@@ -57,7 +55,6 @@ def _clear_bucket(s3_client, bucket_name):
 def _delete_object(s3_client, bucket_name, object_name):
     """Delete an object from an S3 bucket
 
-    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_name: string
     :return: True if the referenced object was deleted, otherwise False
@@ -74,7 +71,6 @@ def _delete_object(s3_client, bucket_name, object_name):
 def _delete_objects(s3_client, bucket_name, object_names):
     """Delete multiple objects from an Amazon S3 bucket
 
-    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_names: list of strings
     :return: True if the referenced objects were deleted, otherwise False
@@ -94,12 +90,11 @@ def _delete_objects(s3_client, bucket_name, object_names):
 # Fetch an file from an Amazon S3 bucket to local path
 def _download_file(s3_client, bucket_name, object_name, local_path):
     """Fetch an file to an Amazon S3 bucket to local path
+
     The src_data argument must be of type bytes or a string that references a file specification.
 
-    :param s3_client: s3 client object
-    :param bucket_name: string
-    :param object_name: string
-    :param local_path: string
+    :param dest_bucket_name: string
+    :param dest_file_key: string
     :return: True if get the file successfully, otherwise False
     """
 
@@ -119,11 +114,10 @@ def _upload_file(s3_client, bucket_name, object_name, local_path):
 
     The src_data argument must be of type bytes or a string that references a file specification.
 
-    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_name: string
     :param local_path: string
-    :return: True if file was added to bucket_name/object_name, otherwise False
+    :return: True if file was added to dest_bucket/dest_file_key, otherwise False
     """
 
     # upload_file
@@ -140,7 +134,6 @@ def _upload_file(s3_client, bucket_name, object_name, local_path):
 def _get_object(s3_client, bucket_name, object_name):
     """Retrieve an object from an Amazon S3 bucket
 
-    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_name: string
     :return: botocore.response.StreamingBody object. If error, return None.
@@ -161,7 +154,6 @@ def _get_object(s3_client, bucket_name, object_name):
 def _get_object_or_wait(s3_client, bucket_name, object_name, sleep_time, time_out=60):
     """Retrieve an object from an Amazon S3 bucket, or wait if not exist,
 
-    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_name: string
     :param sleep_time: float
@@ -184,9 +176,9 @@ def _get_object_or_wait(s3_client, bucket_name, object_name, sleep_time, time_ou
 
 def _put_object(s3_client, bucket_name, object_name, src_data):
     """Add an object to an Amazon S3 bucket
+
     The src_data argument must be of type bytes or a string that references a file specification.
 
-    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_name: string
     :param src_data: bytes of data or string reference to file spec
@@ -220,9 +212,16 @@ def _put_object(s3_client, bucket_name, object_name, src_data):
             object_data.close()
     return True
 
-# TODO(milos) implement bucket creation and expose it to the user
 def _create_bucket(s3_client, bucket_name):
-    pass
+    # NOTE no reason to have the location specified to be eu-central-1
+    s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': 'eu-central-1'})
 
 def _delete_bucket(s3_client, bucket_name):
-    pass
+    try:
+        s3_client.delete_bucket(Bucket=bucket_name)
+    except ClientError as e:
+        logging.error(e)
+        return False
+    return True
+
+    
