@@ -15,7 +15,7 @@ from s3.get_object import get_object
 from sync.sync_grad_redis import *
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 
 # lambda setting
 redis_location = "test.fifamc.ng.0001.euc1.cache.amazonaws.com"

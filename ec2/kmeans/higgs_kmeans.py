@@ -9,7 +9,7 @@ import logging
 
 sys.path.append("../../")
 
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 from torch.multiprocessing import Process
 from model.Kmeans import Kmeans
 

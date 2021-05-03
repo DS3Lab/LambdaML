@@ -4,6 +4,13 @@ import torch
 import numpy as np
 
 
+def get_model(dataset, centroids, dataset_type, n_features, n_cluster):
+    if dataset_type == "dense_libsvm":
+        return KMeans(dataset, centroids)
+    elif dataset_type == "sparse_libsvm":
+        return SparseKMeans(dataset, centroids, n_features, n_cluster)
+
+
 class KMeans(object):
 
     def __init__(self, data, centroids, centroid_type='numpy'):
@@ -13,7 +20,7 @@ class KMeans(object):
         elif centroid_type == 'tensor':
             # input centroids is a pytorch tensor
             self.centroids = centroids.numpy()
-        self.error = np.iinfo(np.int16).max
+        self.error = np.finfo(np.float32).max
 
     @staticmethod
     def euclidean_dist(a, b, axis=1):
@@ -29,7 +36,7 @@ class KMeans(object):
         while True:
             if remaining <= batch_size:
                 dist = np.full((remaining, self.centroids.shape[0]), np.inf)
-                for i in range(self.entroids.shape[0]):
+                for i in range(self.centroids.shape[0]):
                     dist[:, i] = np.sum(
                         np.square(self.X[current_batch:current_batch + remaining] - self.centroids[i, :]),
                         axis=1)
@@ -59,7 +66,7 @@ class KMeans(object):
         # centroids.shape: nr_clusters, data_dim
         closest = self.closest_centroid()
         new_centroids = self.update_centroids(closest)
-        self.error = self.eculidean_dist(self.centroids, new_centroids)
+        self.error = self.euclidean_dist(self.centroids, new_centroids)
         self.centroids = new_centroids
         return
 
@@ -77,7 +84,7 @@ class SparseKMeans(object):
         self.n_feature = _n_feature
         self.centroids = [c.clone().detach().reshape(1, self.n_feature).to_sparse() for c in _centroids]
         self.n_cluster = _n_cluster
-        self.error = np.iinfo(np.int16).max
+        self.error = np.finfo(np.float32).max
         self.model = torch.zeros(self.n_feature, 1)
 
     @staticmethod

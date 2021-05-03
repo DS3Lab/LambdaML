@@ -3,7 +3,7 @@ import urllib.parse
 import numpy as np
 import pickle
 
-from data_loader.LibsvmDataset import DenseDatasetWithFile
+from data_loader.libsvm_dataset import DenseDatasetWithFile
 
 if __name__=="__main__":
     startTs = time.time()
@@ -31,7 +31,7 @@ if __name__=="__main__":
     #result.ins_np = np.array(result.ins_list_np)
     #result.label_np = np.array(result.label_list).reshape(len(result.label_list), 1)
     print(len(result))
-    r = open("/home/ubuntu/code/data/higgs.pkl","wb")
+    r = open("/home/ubuntu/code/data/s3.pkl","wb")
     pickle.dump(result,r)
     r.close()
     print("parse time = {} s".format(time.time()-parse_start))

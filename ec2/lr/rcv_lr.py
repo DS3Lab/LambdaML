@@ -10,7 +10,7 @@ sys.path.append("../../")
 
 from pytorch_model.sparse_lr import *
 from ec2.data_partition import partition_sparse
-from data_loader.LibsvmDataset import SparseDatasetWithLines
+from data_loader.libsvm_dataset import SparseDatasetWithLines
 
 
 def dist_is_initialized():

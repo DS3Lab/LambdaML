@@ -17,7 +17,7 @@ from s3.get_object import get_object
 from s3.put_object import put_object
 
 from pytorch_model.DenseSVM import DenseSVM, MultiClassHingeLoss, BinaryClassHingeLoss
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 
 
 # lambda setting

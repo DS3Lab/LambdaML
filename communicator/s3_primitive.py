@@ -4,12 +4,25 @@ import numpy as np
 from storage.storage import S3Storage
 
 
+def async_reduce(storage, vector, bucket_name, vector_name):
+    assert isinstance(storage, S3Storage)
+
+    # vector is supposed to be a 1-d numpy array
+    vec_shape = vector.shape
+    vec_dtype = vector.dtype
+
+    data = storage.load_or_wait(vector_name, bucket_name, 0.1).read()
+    new_vec = np.frombuffer(data, dtype=vec_dtype).reshape(vec_shape)
+    storage.save(vector.tobytes(), vector_name, bucket_name)
+
+    return new_vec
+
+
 def reduce_batch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker_index, postfix):
     assert isinstance(storage, S3Storage)
 
     # vector is supposed to be a 1-d numpy array
     vec_shape = vector.shape
-    assert vec_shape[0] == 1
     vec_dtype = vector.dtype
     merged_vec = np.zeros(vec_shape, dtype=vec_dtype)
 
@@ -34,7 +47,7 @@ def reduce_batch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker
                     key_epoch = key_splits[1]
                     key_batch = key_splits[2]
                     if key_epoch == str(curr_epoch) and key_batch == str(curr_batch):
-                        data = storage.load(tmp_bucket, file_key).read()
+                        data = storage.load(file_key, tmp_bucket).read()
                         bytes_data = np.frombuffer(data, dtype=vec_dtype)
                         tmp_vec = bytes_data.reshape(vec_shape)
                         merged_vec += tmp_vec
@@ -44,10 +57,10 @@ def reduce_batch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker
         # write the merged data back to s3
         merged_file_name = 'merged_' + postfix
         storage.save(merged_vec.tobytes(), merged_file_name, merged_bucket)
-        delete_expired_batch(merged_bucket, curr_epoch, curr_batch)
+        delete_expired_batch(storage, merged_bucket, curr_epoch, curr_batch)
     else:
         merged_file_name = 'merged_' + postfix
-        merged_data = storage.load_or_wait(merged_bucket, merged_file_name, 0.1).read()
+        merged_data = storage.load_or_wait(merged_file_name, merged_bucket, 0.1).read()
         merged_vec = np.frombuffer(merged_data, dtype=vec_dtype).reshape(vec_shape)
 
     return merged_vec
@@ -58,7 +71,6 @@ def reduce_epoch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker
 
     # vector is supposed to be a 1-d numpy array
     vec_shape = vector.shape
-    assert vec_shape[0] == 1
     vec_dtype = vector.dtype
     merged_vec = np.zeros(vec_shape, dtype=vec_dtype)
 
@@ -80,7 +92,7 @@ def reduce_epoch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker
                     key_splits = file_key.split("_")
                     key_epoch = key_splits[1]
                     if key_epoch == str(curr_epoch):
-                        data = storage.load(tmp_bucket, file_key).read()
+                        data = storage.load(file_key, tmp_bucket).read()
                         bytes_data = np.frombuffer(data, dtype=vec_dtype)
                         tmp_vec = bytes_data.reshape(vec_shape)
                         merged_vec += tmp_vec
@@ -89,10 +101,10 @@ def reduce_epoch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker
                 storage.delete(delete_list, tmp_bucket)
         # write the merged data back to s3
         storage.save(merged_vec.tobytes(), 'merged_' + postfix, merged_bucket)
-        delete_expired_epoch(merged_bucket, curr_epoch)
+        delete_expired_epoch(storage, merged_bucket, curr_epoch)
     else:
         merged_file_name = 'merged_' + postfix
-        merged_data = storage.load_or_wait(merged_bucket, merged_file_name, 0.1).read()
+        merged_data = storage.load_or_wait(merged_file_name, merged_bucket, 0.1).read()
         merged_vec = np.frombuffer(merged_data, dtype=vec_dtype).reshape(vec_shape)
 
     return merged_vec
@@ -100,6 +112,7 @@ def reduce_epoch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker
 
 # delete the merged values of the *current or older* steps
 def delete_expired_batch(storage, bucket_name, cur_epoch, cur_batch):
+    assert isinstance(storage, S3Storage)
     objects = storage.list(bucket_name)
     if objects is not None:
         file_names = []
@@ -112,9 +125,11 @@ def delete_expired_batch(storage, bucket_name, cur_epoch, cur_batch):
                 file_names.append(file_key)
         if len(file_names) >= 1:
             storage.delete(file_names, bucket_name)
+    return True
 
 
 def delete_expired_epoch(storage, bucket_name, cur_epoch):
+    assert isinstance(storage, S3Storage)
     objects = storage.list(bucket_name)
     if objects is not None:
         file_names = []
@@ -126,6 +141,7 @@ def delete_expired_epoch(storage, bucket_name, cur_epoch):
                 file_names.append(file_key)
         if len(file_names) >= 1:
             storage.delete(file_names, bucket_name)
+    return True
 
 
 def reduce_scatter_batch(storage, vector, tmp_bucket, merged_bucket, num_workers, my_rank, postfix):
@@ -167,7 +183,7 @@ def reduce_scatter_batch(storage, vector, tmp_bucket, merged_bucket, num_workers
                 # if it's the chunk I care and it is from the current step
                 # format of key in tmp-bucket: chunkID_workerID_epoch_batch
                 if key_splits[0] == str(my_rank) and key_splits[2] == curr_epoch and key_splits[3] == curr_batch:
-                    data = storage.load(tmp_bucket, file_key).read()
+                    data = storage.load(file_key, tmp_bucket).read()
                     bytes_data = np.frombuffer(data, dtype=vector.dtype)
                     my_chunk = my_chunk + bytes_data
                     num_files += 1

@@ -3,7 +3,7 @@ import boto3
 
 
 def main():
-    bucket = "higgs-10"
+    bucket = "s3-10"
     key = "0_10"
     tmp_path = "/home/ubuntu/envs/"
     download_start = time.time()

@@ -10,10 +10,10 @@ from s3.clear_bucket import clear_bucket
 from sync.sync_reduce import reduce_epoch, delete_expired_merged_epoch
 
 from model.SVM import SVM
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 
 # lambda setting
-# file_bucket = "higgs-libsvm"
+# file_bucket = "s3-libsvm"
 # tmp_bucket = "tmp-grads"
 # merged_bucket = "merged-params"
 local_dir = "/tmp"

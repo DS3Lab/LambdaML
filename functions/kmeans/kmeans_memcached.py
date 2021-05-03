@@ -10,7 +10,7 @@ from elasticache.Memcached.set_object import hset_object
 from s3.get_object import get_object
 from s3.put_object import put_object
 from elasticache.Memcached.__init__ import memcached_init
-from data_loader.LibsvmDataset import DenseDatasetWithLines, SparseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines, SparseDatasetWithLines
 from functions.kmeans.utils import store_centroid_as_numpy, process_centroid, get_new_centroids
 
 # setting

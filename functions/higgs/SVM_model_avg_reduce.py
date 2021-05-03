@@ -10,7 +10,7 @@ from s3.clear_bucket import clear_bucket
 from sync.sync_reduce import reduce_epoch, delete_expired_merged_epoch
 
 from model.SVM import SVM
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 
 # lambda setting
 local_dir = "/tmp"

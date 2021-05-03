@@ -16,7 +16,7 @@ from model.SVM import SVM
 from data_loader.YFCCLibsvmDataset import DenseLibsvmDataset
 
 # lambda setting
-# file_bucket = "higgs-libsvm"
+# file_bucket = "s3-libsvm"
 # tmp_bucket = "tmp-grads"
 # merged_bucket = "merged-params"
 local_dir = "/tmp"

@@ -2,7 +2,7 @@ from sync.sync_grad import *
 from functions.kmeans.utils import *
 from model.Kmeans import *
 
-from data_loader.LibsvmDataset import SparseDatasetWithLines, DenseDatasetWithLines
+from data_loader.libsvm_dataset import SparseDatasetWithLines, DenseDatasetWithLines
 from thrift_ps.ps_service import ParameterServer
 from thrift_ps.client import ps_client
 

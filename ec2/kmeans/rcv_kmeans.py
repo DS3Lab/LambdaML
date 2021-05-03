@@ -11,7 +11,7 @@ sys.path.append("../../")
 
 from pytorch_model.sparse_kmeans import SparseKmeans
 from torch.multiprocessing import Process
-from data_loader.LibsvmDataset import SparseDatasetWithLines
+from data_loader.libsvm_dataset import SparseDatasetWithLines
 
 
 def dist_is_initialized():

@@ -2,7 +2,7 @@ import argparse
 
 import time
 
-# ./disk_test.py --file /bigdata/dataset/higgs-vertical/0_10
+# ./disk_test.py --file /bigdata/dataset/s3-vertical/0_10
 
 
 def main():

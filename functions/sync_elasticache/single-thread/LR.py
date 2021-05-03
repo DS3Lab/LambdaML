@@ -9,7 +9,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseDatasetWithFile
+from data_loader.libsvm_dataset import DenseDatasetWithFile
 # lambda setting
 
 
@@ -30,8 +30,8 @@ def handler():
 
     num_features = 30
     num_classes = 2
-    file = "/home/ubuntu/code/data/higgs.pkl"
-    #file = "./ec2/higgs.pkl"
+    file = "/home/ubuntu/code/data/s3.pkl"
+    #file = "./ec2/s3.pkl"
     batch_size = 100000
     # read file(dataset) from s3
     parse_start = time.time()

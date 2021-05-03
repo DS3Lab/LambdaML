@@ -9,7 +9,7 @@ from elasticache.Redis.get_object import hget_object_or_wait
 from elasticache.Redis.set_object import hset_object
 from s3.get_object import get_object
 from elasticache.Redis.__init__ import redis_init
-from data_loader.LibsvmDataset import DenseDatasetWithLines, SparseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines, SparseDatasetWithLines
 from functions.kmeans.utils import store_centroid_as_numpy, process_centroid, get_new_centroids
 
 # setting

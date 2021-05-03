@@ -7,7 +7,7 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 from model.LogisticRegression import LogisticRegression
 from pytorch_model.sparse_lr import *
 from sync.sync_grad import *

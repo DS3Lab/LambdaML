@@ -12,10 +12,10 @@ from elasticache.Memcached.get_object import hget_object
 from sync.sync_grad_memcached import reduce_epoch, clear_bucket
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 
 # lambda setting
-# file_bucket = "higgs-libsvm"
+# file_bucket = "s3-libsvm"
 # tmp_bucket = "tmp-grads"
 # merged_bucket = "merged-params"
 local_dir = "/tmp"

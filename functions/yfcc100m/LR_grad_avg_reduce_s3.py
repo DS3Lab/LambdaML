@@ -16,7 +16,7 @@ from model.LogisticRegression import LogisticRegression
 from data_loader.YFCCLibsvmDataset import DenseLibsvmDataset
 
 # lambda setting
-# file_bucket = "higgs-libsvm"
+# file_bucket = "s3-libsvm"
 # tmp_bucket = "tmp-grads"
 # merged_bucket = "merged-params"
 local_dir = "/tmp"

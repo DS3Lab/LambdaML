@@ -11,9 +11,9 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from data_loader.LibsvmDataset import DenseDatasetWithLines, DenseDatasetWithNP
+from data_loader.libsvm_dataset import DenseDatasetWithLines, DenseDatasetWithNP
 from data_loader.YFCCLibsvmDataset import DenseLibsvmDataset
-from data_loader.LibsvmDataset import SparseDatasetWithLines
+from data_loader.libsvm_dataset import SparseDatasetWithLines
 from data_loader.cifar10_dataset import CIFAR10_subset
 
 

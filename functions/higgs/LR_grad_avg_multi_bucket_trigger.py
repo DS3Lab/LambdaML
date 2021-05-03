@@ -10,8 +10,8 @@ from sync.sync_grad import clear_bucket
 
 
 def handler(event, context):
-    dataset_name = 'higgs'
-    bucket_name = "higgs-libsvm"
+    dataset_name = 's3'
+    bucket_name = "s3-libsvm"
     num_workers = 10
     num_buckets = 1
     tmp_bucket_prefix = "tmp-params"

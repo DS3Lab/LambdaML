@@ -11,11 +11,11 @@ from sync.sync_grad import *
 from sync.sync_reduce_scatter import reduce_scatter_epoch, delete_expired_merged
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 from sync.sync_meta import SyncMeta
 
 # lambda setting
-file_bucket = "higgs-libsvm"
+file_bucket = "s3-libsvm"
 # tmp_bucket = "tmp-grads"
 # merged_bucket = "merged-params"
 local_dir = "/tmp"

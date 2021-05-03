@@ -14,7 +14,7 @@ import random
 import boto3
 import time
 
-from cifar10_dataset import CIFAR10_subset 
+from data_loader.cifar10_dataset import CIFAR10_subset
 
 
 s3 = boto3.resource('s3')

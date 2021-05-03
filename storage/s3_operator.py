@@ -2,7 +2,6 @@ import urllib
 
 import logging
 import time
-import sys
 import boto3
 from botocore.exceptions import ClientError
 
@@ -15,6 +14,7 @@ def get_client():
 def list_bucket_objects(s3_client, bucket_name):
     """List the objects in an Amazon S3 bucket
 
+    :param s3_client: s3 client object
     :param bucket_name: string
     :return: List of bucket objects. If error, return None.
     """
@@ -37,6 +37,7 @@ def list_bucket_objects(s3_client, bucket_name):
 def clear_bucket(s3_client, bucket_name):
     """Clear the objects in an Amazon S3 bucket
 
+    :param s3_client: s3 client object
     :param bucket_name: string
     :return: True if successful. If error, return None.
     """
@@ -48,13 +49,14 @@ def clear_bucket(s3_client, bucket_name):
             file_key = urllib.parse.unquote_plus(obj["Key"], encoding='utf-8')
             file_names.append(file_key)
         if len(file_names) >= 1:
-            delete_objects(bucket_name, file_names)
+            delete_objects(s3_client, bucket_name, file_names)
     return True
 
 
 def delete_object(s3_client, bucket_name, object_name):
     """Delete an object from an S3 bucket
 
+    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_name: string
     :return: True if the referenced object was deleted, otherwise False
@@ -71,6 +73,7 @@ def delete_object(s3_client, bucket_name, object_name):
 def delete_objects(s3_client, bucket_name, object_names):
     """Delete multiple objects from an Amazon S3 bucket
 
+    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_names: list of strings
     :return: True if the referenced objects were deleted, otherwise False
@@ -90,11 +93,12 @@ def delete_objects(s3_client, bucket_name, object_names):
 # Fetch an file from an Amazon S3 bucket to local path
 def download_file(s3_client, bucket_name, object_name, local_path):
     """Fetch an file to an Amazon S3 bucket to local path
-
     The src_data argument must be of type bytes or a string that references a file specification.
 
-    :param dest_bucket_name: string
-    :param dest_file_key: string
+    :param s3_client: s3 client object
+    :param bucket_name: string
+    :param object_name: string
+    :param local_path: string
     :return: True if get the file successfully, otherwise False
     """
 
@@ -114,10 +118,11 @@ def upload_file(s3_client, bucket_name, object_name, local_path):
 
     The src_data argument must be of type bytes or a string that references a file specification.
 
+    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_name: string
     :param local_path: string
-    :return: True if file was added to dest_bucket/dest_file_key, otherwise False
+    :return: True if file was added to bucket_name/object_name, otherwise False
     """
 
     # upload_file
@@ -134,6 +139,7 @@ def upload_file(s3_client, bucket_name, object_name, local_path):
 def get_object(s3_client, bucket_name, object_name):
     """Retrieve an object from an Amazon S3 bucket
 
+    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_name: string
     :return: botocore.response.StreamingBody object. If error, return None.
@@ -152,6 +158,7 @@ def get_object(s3_client, bucket_name, object_name):
 def get_object_or_wait(s3_client, bucket_name, object_name, sleep_time, time_out=60):
     """Retrieve an object from an Amazon S3 bucket, or wait if not exist,
 
+    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_name: string
     :param sleep_time: float
@@ -173,9 +180,9 @@ def get_object_or_wait(s3_client, bucket_name, object_name, sleep_time, time_out
 
 def put_object(s3_client, bucket_name, object_name, src_data):
     """Add an object to an Amazon S3 bucket
-
     The src_data argument must be of type bytes or a string that references a file specification.
 
+    :param s3_client: s3 client object
     :param bucket_name: string
     :param object_name: string
     :param src_data: bytes of data or string reference to file spec

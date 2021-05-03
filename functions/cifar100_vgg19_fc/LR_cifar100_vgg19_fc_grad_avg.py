@@ -12,7 +12,7 @@ from s3.clear_bucket import clear_bucket
 from sync.sync_reduce import reduce_batch, delete_expired_merged_batch
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseDatasetWithNP
+from data_loader.libsvm_dataset import DenseDatasetWithNP
 
 # lambda setting
 local_dir = "/tmp/"

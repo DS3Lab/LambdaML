@@ -13,7 +13,7 @@ from s3.put_object import put_object
 from sync.sync_grad import *
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import SparseDatasetWithLines
+from data_loader.libsvm_dataset import SparseDatasetWithLines
 from sync.sync_meta import SyncMeta
 
 # lambda setting

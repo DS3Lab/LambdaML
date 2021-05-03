@@ -14,11 +14,11 @@ from elasticache.Memcached.__init__ import memcached_init
 from sync.sync_grad_memcached import merge_w_b_grads, put_merged_w_b_grads, get_merged_w_b_grads
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 
 # lambda setting
-grad_bucket = "higgs-grads"
-model_bucket = "higgs-updates"
+grad_bucket = "s3-grads"
+model_bucket = "s3-updates"
 local_dir = "/tmp"
 w_prefix = "w_"
 b_prefix = "b_"

@@ -4,7 +4,7 @@ import urllib.parse
 import numpy as np
 import torch
 
-from data_loader.LibsvmDataset import SparseDatasetWithLines
+from data_loader.libsvm_dataset import SparseDatasetWithLines
 from s3.get_object import *
 from pytorch_model.sparse_svm import *
 from sync.sync_grad import *

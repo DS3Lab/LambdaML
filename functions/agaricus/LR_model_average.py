@@ -9,7 +9,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from sync.sync_grad import *
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 from sync.sync_meta import SyncMeta
 
 # lambda setting

@@ -3,6 +3,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def get_models(name):
+    if name == "mobilenet":
+        return MobileNet()
+    elif name == "resnet18":
+        return resnet18()
+    elif name == "resnet50":
+        return resnet50()
+    else:
+        raise Exception("deep model {} is not supported".format(name))
+
+
 class MobileNetBlock(nn.Module):
     '''Depthwise conv + Pointwise conv'''
     def __init__(self, in_planes, out_planes, stride=1):

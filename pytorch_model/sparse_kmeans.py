@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import time
 
-from data_loader.LibsvmDataset import SparseDatasetWithLines
+from data_loader.libsvm_dataset import SparseDatasetWithLines
 
 
 def _l2_dist_sq(x1, x2):

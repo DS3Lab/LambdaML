@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import time
 
-from data_loader.LibsvmDataset import DenseDatasetWithLines, SparseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines, SparseDatasetWithLines
 from s3.get_object import get_object_or_wait, get_object
 from s3.put_object import put_object
 from sync.sync_centroids import compute_average_centroids

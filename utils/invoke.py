@@ -7,7 +7,7 @@ nr_files = 50
 client = boto3.client('lambda')
 
 payload = dict()
-payload['bucket_name'] = "higgs-libsvm"
+payload['bucket_name'] = "s3-libsvm"
 payload['max_dim'] = 29
 payload['num_clusters'] = 10000
 payload['worker_cent_bucket'] = "worker-centroids"

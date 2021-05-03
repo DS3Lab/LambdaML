@@ -1,8 +1,8 @@
 #!/bin/bash
 # 1 thread on one machine
-# ./run_higgs_kmeans_local.sh 1 100 10 30 127.0.0.1:26000 ~/dataset/higgs-1/
+# ./run_higgs_kmeans_local.sh 1 100 10 30 127.0.0.1:26000 ~/dataset/s3-1/
 # one thread on one machine
-# nohup python -u higgs_kmeans.py --init-method tcp://127.0.0.1:26000 --rank 0 --world-size 1 --epochs 100 -k 10 --features 30 --root ~/dataset/higgs-1/ --no-cuda > higgs_kmeans_w1_r0_k10.log 2>&1 &
+# nohup python -u higgs_kmeans.py --init-method tcp://127.0.0.1:26000 --rank 0 --world-size 1 --epochs 100 -k 10 --features 30 --root ~/dataset/s3-1/ --no-cuda > higgs_kmeans_w1_r0_k10.log 2>&1 &
 
 world_size=$1
 epochs=$2

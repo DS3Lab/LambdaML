@@ -5,6 +5,16 @@ import torch
 from torch.utils.data.dataset import Dataset
 
 
+def from_lines(lines, dim, dataset_type):
+    if dataset_type == "dense_libsvm":
+        return DenseDatasetWithLines(lines, dim)
+    elif dataset_type == "sparse_libsvm":
+        return SparseDatasetWithLines(lines, dim)
+    else:
+        raise Exception("dataset type {} is not supported, should be dense_libsvm or sparse_libsvm"
+                        .format(dataset_type))
+
+
 class SparseDatasetWithLines(Dataset):
 
     def __init__(self, lines, max_dim):

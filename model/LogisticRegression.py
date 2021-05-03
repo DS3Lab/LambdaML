@@ -5,7 +5,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 import numpy as np
 
-from data_loader.LibsvmDataset import DenseDatasetWithFile
+from data_loader.libsvm_dataset import DenseDatasetWithFile
 
 
 class LogisticRegression(torch.nn.Module):

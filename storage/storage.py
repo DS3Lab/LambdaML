@@ -47,10 +47,16 @@ class S3Storage(BaseStorage):
             return s3_operator.delete_objects(self.client, bucket_name, key)
 
     def clear(self, bucket_name=""):
-        return s3_operator.clear_bucket(bucket_name)
+        return s3_operator.clear_bucket(self.client, bucket_name)
 
     def list(self, bucket_name=""):
         return s3_operator.list_bucket_objects(self.client, bucket_name)
+
+    def download_file(self, bucket_name, object_name, local_path):
+        return s3_operator.download_file(self.client, bucket_name, object_name, local_path)
+
+    def upload_file(self, bucket_name, object_name, local_path):
+        return s3_operator.upload_file(self.client, bucket_name, object_name, local_path)
 
 
 class RedisStorage(BaseStorage):

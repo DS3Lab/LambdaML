@@ -15,7 +15,7 @@ from sync.sync_grad_memcached import merge_w_b_grads, put_merged_w_b_grads, get_
 
 
 from model.SVM import SVM
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 
 # lambda setting
 local_dir = "/tmp"

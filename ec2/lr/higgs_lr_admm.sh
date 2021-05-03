@@ -1,6 +1,6 @@
 #!/bin/bash
 # 10 machines
-# ./higgs_lr_admm.sh 10 50 10 30 2 0.01 10000 /bigdata/higgs/ 172.31.35.34:24000 t2.medium-10
+# ./higgs_lr_admm.sh 10 50 10 30 2 0.01 10000 /bigdata/s3/ 172.31.35.34:24000 t2.medium-10
 
 world_size=$1
 admm_epochs=$2

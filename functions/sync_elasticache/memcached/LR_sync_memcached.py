@@ -15,11 +15,11 @@ from s3.put_object import put_object
 from sync.sync_grad_memcached import *
 
 from model.LogisticRegression import LogisticRegression
-from data_loader.LibsvmDataset import DenseDatasetWithLines
+from data_loader.libsvm_dataset import DenseDatasetWithLines
 
 # lambda setting
-grad_bucket = "higgs-grads"
-model_bucket = "higgs-updates"
+grad_bucket = "s3-grads"
+model_bucket = "s3-updates"
 local_dir = "/tmp"
 w_prefix = "w_"
 b_prefix = "b_"

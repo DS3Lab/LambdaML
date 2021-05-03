@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 
-from data_loader.LibsvmDataset import SparseDatasetWithLines
+from data_loader.libsvm_dataset import SparseDatasetWithLines
 
 
 def dist_is_initialized():
