@@ -6,6 +6,8 @@ from storage import s3_operator
 
 def handler(event, context):
 
+    function_name = "lambda_core"
+
     # dataset setting
     dataset_name = 'higgs'
     data_bucket = "higgs-10"
@@ -47,6 +49,6 @@ def handler(event, context):
     for i in range(n_workers):
         payload['worker_index'] = i
         payload['file'] = '{}_{}'.format(i, n_workers)
-        lambda_client.invoke(FunctionName="lambda_core",
+        lambda_client.invoke(FunctionName=function_name,
                              InvocationType='Event',
                              Payload=json.dumps(payload))

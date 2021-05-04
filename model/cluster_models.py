@@ -92,6 +92,9 @@ class SparseKMeans(object):
         diff = torch.sparse.FloatTensor.sub(x1, x2)
         sq_diff = torch.sparse.FloatTensor.mul(diff, diff)
         dist_sum = torch.sparse.sum(sq_diff)
+        # diff = torch.sub(x1.to_dense(), x2.to_dense())
+        # sq_diff = torch.mul(diff, diff)
+        # dist_sum = torch.sum(sq_diff)
         return dist_sum
 
     def closest_centroid(self):
@@ -112,7 +115,7 @@ class SparseKMeans(object):
     def move_centroids(self, closest):
         start = time.time()
         c_mean = [torch.sparse.FloatTensor(self.centroids[0].size()[0], self.centroids[0].size()[1])
-                  for i in range(self.n_clusters)]
+                  for i in range(self.n_cluster)]
         c_count = [0 for i in range(self.n_cluster)]
         for i in range(len(self.data)):
             c_mean[closest[i]] = torch.sparse.FloatTensor.add(self.data[i], c_mean[closest[i]])
@@ -134,7 +137,7 @@ class SparseKMeans(object):
         print("Start computing kmeans...")
         closest = self.closest_centroid()
         new_centroids = self.move_centroids(closest)
-        self.error = self.get_error(new_centroids)
+        self.error = self.get_error(new_centroids).item()
         self.centroids = new_centroids
         return
 
@@ -143,8 +146,8 @@ class SparseKMeans(object):
             return self.centroids
         elif centroids_type == "numpy":
             cent_lst = [self.centroids[i].to_dense().numpy() for i in range(self.n_cluster)]
-            centroid = np.array(cent_lst).reshape(self.n_cluster, self.n_feature)
-            return centroid
+            centroid_np = np.array(cent_lst).reshape(self.n_cluster, self.n_feature)
+            return centroid_np
         elif centroids_type == "dense_tensor":
             cent_tensor_lst = [self.centroids[i].to_dense() for i in range(self.n_cluster)]
             return torch.stack(cent_tensor_lst)
