@@ -8,7 +8,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from data_loader import libsvm_dataset
 
 from utils.constants import Prefix, MLModel, Optimization, Synchronization
-from storage.storage import S3Storage
+from storage.s3.s3_type import S3Storage
 from communicator.communicator import S3Communicator
 
 from model import linear_models

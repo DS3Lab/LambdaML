@@ -5,7 +5,7 @@ import time
 from data_loader import libsvm_dataset
 
 from utils.constants import Prefix, Synchronization
-from storage.storage import S3Storage
+from storage.s3.s3_type import S3Storage
 from communicator.communicator import S3Communicator
 
 from model import cluster_models

@@ -4,12 +4,12 @@ import redis
 from botocore.exceptions import ClientError
 
 
-def _get_client(endpoint, port):
+def get_client(endpoint, port):
     client = redis.Redis(host=endpoint, port=port, db=0)
     return client
 
 
-def _delete_keys(client, keys):
+def delete_keys(client, keys):
     """Delete keys in configured redis
 
     :param client: redis client object
@@ -26,7 +26,7 @@ def _delete_keys(client, keys):
     return True
 
 
-def _delete_fields(client, key, fields):
+def delete_fields(client, key, fields):
     """delete the field within hash key in configured redis
 
     :param client: redis client object
@@ -45,7 +45,7 @@ def _delete_fields(client, key, fields):
     return True
 
 
-def _get_object(client, key):
+def get_object(client, key):
     """Retrieve an object from configured redis under specified key
 
     :param client: redis client object
@@ -63,7 +63,7 @@ def _get_object(client, key):
     return response
 
 
-def _get_object_or_wait(client, key, sleep_time, time_out=60):
+def get_object_or_wait(client, key, sleep_time, time_out=60):
     """Retrieve an object from configured redis under specified key; wait if not exist
 
     :param client: Redis client object
@@ -91,7 +91,7 @@ def _get_object_or_wait(client, key, sleep_time, time_out=60):
         return None
 
 
-def _hget_object(client, key, field):
+def hget_object(client, key, field):
     """Retrieve an object from configured redis under specified key and field
 
     :param client: redis client object
@@ -109,7 +109,7 @@ def _hget_object(client, key, field):
     return response
 
 
-def _hget_object_or_wait(client, key, field, sleep_time, time_out=60):
+def hget_object_or_wait(client, key, field, sleep_time, time_out=60):
     """Retrieve an object from configured redis under specified key and field; wait if not exist
 
     :param client: redis client object
@@ -138,7 +138,7 @@ def _hget_object_or_wait(client, key, field, sleep_time, time_out=60):
         return None
 
 
-def _list_keys(client, count=1000):
+def list_keys(client, count=1000):
     """list the keys in configured redis
 
     :param client: redis client object
@@ -158,7 +158,7 @@ def _list_keys(client, count=1000):
     return None
 
 
-def _hlist_keys(client, key, count=1000):
+def hlist_keys(client, key, count=1000):
     """list all the fields within hash key in configured redis
 
     :param client: redis client object
@@ -179,7 +179,7 @@ def _hlist_keys(client, key, count=1000):
     return None
 
 
-def _set_object(client, key, src_data):
+def set_object(client, key, src_data):
     """Add value from configured redis under specified key
 
     :param client: redis client object
@@ -203,7 +203,7 @@ def _set_object(client, key, src_data):
     return True
 
 
-def _hset_object(client, key, field, src_data):
+def hset_object(client, key, field, src_data):
     """Add value from configured redis under specified key of certain hashtable
 
     :param client: redis client object
@@ -227,7 +227,7 @@ def _hset_object(client, key, field, src_data):
     return True
 
 
-def _clear_all(client):
+def clear_all(client):
     """
 
     :param client: redis client object
@@ -240,4 +240,3 @@ def _clear_all(client):
         logging.error(e)
         return False
     return True
-

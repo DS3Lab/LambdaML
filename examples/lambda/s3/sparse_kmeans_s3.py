@@ -7,7 +7,7 @@ import torch
 from data_loader import libsvm_dataset
 
 from utils.constants import Prefix, Synchronization
-from storage.storage import S3Storage
+from storage.s3.s3_type import S3Storage
 from communicator.communicator import S3Communicator
 
 from model import cluster_models
@@ -30,7 +30,7 @@ def centroid_bytes2np(centroid_bytes, n_cluster, data_type, with_error=False):
         return centroid_np.reshape(n_cluster, int(centroid_size / n_cluster))
 
 
-def new_centroids_with_error(dataset, dataset_type, old_centroids, epoch, n_features, n_clusters, data_type):
+def new_centroids_with_error(model, dataset, dataset_type, old_centroids, epoch, n_features, n_clusters, data_type):
     compute_start = time.time()
     if dataset_type == "dense_libsvm":
         model = KMeans(dataset, old_centroids)

@@ -6,8 +6,6 @@ import numpy as np
 
 from utils.metric import Accuracy, Average
 
-from data_loader.libsvm_dataset import SparseDatasetWithLines
-
 
 def get_model(model, n_features, n_classes):
     if model == "lr":

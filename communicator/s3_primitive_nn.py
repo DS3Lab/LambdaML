@@ -2,7 +2,7 @@ import urllib
 import numpy as np
 import pickle
 
-from storage.storage import S3Storage
+from storage.s3.s3_type import S3Storage
 
 
 def async_reduce(storage, input_bytes, bucket_name, object_name):

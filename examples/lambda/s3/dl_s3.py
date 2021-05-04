@@ -13,8 +13,8 @@ import torch.nn.functional as F
 import boto3
 
 from utils.constants import Prefix, MLModel, Optimization, Synchronization
-from storage import s3_operator
-from storage.storage import S3Storage
+from storage.s3 import s3_operator
+from storage.s3.s3_type import S3Storage
 from communicator.communicator import S3Communicator
 
 from model import deep_models

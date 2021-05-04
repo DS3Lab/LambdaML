@@ -4,7 +4,7 @@ import memcache
 from botocore.exceptions import ClientError
 
 
-def _get_client(ip, port=11211):
+def get_client(ip, port=11211):
     try:
         endpoint = ip + ":" + str(port)
         client = memcache.Client([endpoint])
@@ -15,7 +15,7 @@ def _get_client(ip, port=11211):
     return client
 
 
-def _delete_key(client, key):
+def delete_key(client, key):
     """Delete key in configured memcached
 
     :param client: memcached client object
@@ -32,7 +32,7 @@ def _delete_key(client, key):
     return True
 
 
-def _delete_keys(client, keys):
+def delete_keys(client, keys):
     """Delete keys in configured memcached
 
     :param client: memcached client object
@@ -49,7 +49,7 @@ def _delete_keys(client, keys):
     return True
 
 
-def _clear_all(client):
+def clear_all(client):
     """Delete all keys in configured memcached
 
     :param client: memcached client object
@@ -58,7 +58,7 @@ def _clear_all(client):
     return True
 
 
-def _get_object(client, key):
+def get_object(client, key):
     """Retrieve an object from configured memcached under specified key
 
     :param client: memcached client object
@@ -74,7 +74,7 @@ def _get_object(client, key):
     return response
 
 
-def _get_object_v2(client, key, field):
+def get_object_v2(client, key, field):
     """Retrieve an object from configured memcached under specified key and field
 
     :param client: memcached client object
@@ -92,7 +92,7 @@ def _get_object_v2(client, key, field):
     return response
 
 
-def _get_objects(client, keys):
+def get_objects(client, keys):
     """Retrieve objects from configured memcached under specified keys
 
     :param client: memcache client object
@@ -106,7 +106,7 @@ def _get_objects(client, keys):
         return None
 
 
-def _get_object_or_wait(client, key, sleep_time, time_out=60):
+def get_object_or_wait(client, key, sleep_time, time_out=60):
     """Retrieve an object from configured memcache under specified key; wait if not exist
 
     :param client: memcache client object
@@ -130,7 +130,7 @@ def _get_object_or_wait(client, key, sleep_time, time_out=60):
         return None
 
 
-def _get_object_or_wait_v2(client, key, field, sleep_time, time_out=60):
+def get_object_or_wait_v2(client, key, field, sleep_time, time_out=60):
     """Retrieve an object from configured memcache under specified key and field; wait if not exist
 
     :param client: memcache client object
@@ -156,7 +156,7 @@ def _get_object_or_wait_v2(client, key, field, sleep_time, time_out=60):
         return None
 
 
-def _set_object(client, key, src_data):
+def set_object(client, key, src_data):
     """Add value from configured memcache under specified key of certain hashtable
 
     :param client: string
@@ -178,7 +178,7 @@ def _set_object(client, key, src_data):
     return True
 
 
-def _set_object_v2(client, key, field, src_data):
+def set_object_v2(client, key, field, src_data):
     """Add value from configured memcache under specified key of certain hashtable
 
     :param client: string
@@ -202,7 +202,7 @@ def _set_object_v2(client, key, field, src_data):
     return True
 
 
-def _list_keys(client, keys):
+def list_keys(client, keys):
     """
 
     :param client: string

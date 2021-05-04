@@ -1,4 +1,6 @@
-from storage.storage import S3Storage, RedisStorage, MemcachedStorage
+from storage.s3.s3_type import S3Storage
+from storage.redis.redis_type import RedisStorage
+from storage.memcached.memcached_type import MemcachedStorage
 from communicator import s3_primitive, s3_primitive_nn
 
 

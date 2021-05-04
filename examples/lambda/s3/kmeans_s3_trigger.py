@@ -1,7 +1,7 @@
 import boto3
 import json
 
-from storage import s3_operator
+from storage.s3 import s3_operator
 
 
 def handler(event, context):

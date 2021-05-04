@@ -25,7 +25,7 @@ class Prefix:
 class MLModel:
     Linear_Models = ["lr", "svm"]
     Sparse_Linear_Models = ["sparse_lr", "sparse_svm"]
-    Cluster_Models = ["kmeans"]
+    Cluster_Models = ["kmeans", "sparse_kmeans"]
     Deep_Models = ["resnet", "mobilenet"]
 
 

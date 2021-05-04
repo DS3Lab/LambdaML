@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Union, Iterator, List
 
+
 class BaseStorage(ABC):
 
     @abstractmethod
