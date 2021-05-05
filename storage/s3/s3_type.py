@@ -4,8 +4,8 @@ from storage.base import BaseStorage
 
 class S3Storage(BaseStorage):
 
-    def __init__(self, name):
-        super(S3Storage, self).__init__(name)
+    def __init__(self):
+        super(S3Storage, self).__init__()
         self.client = s3_operator.get_client()
 
     def save(self, src_data, object_name, bucket_name=""):
