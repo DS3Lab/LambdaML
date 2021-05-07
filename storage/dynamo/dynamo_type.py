@@ -7,10 +7,9 @@ class DynamoTable(BaseStorage):
     def __init__(self, _table_name):
         super(DynamoTable, self).__init__()
         self.table = dynamo_operator.get_table(_table_name)
-        self.table.get_item()
 
-    def save(self, src_data, key=""):
-        return dynamo_operator.put_item(self.table, key, src_data)
+    def save(self, src_data, key="", key_col=""):
+        return dynamo_operator.put_item(self.table, key_col, key, src_data)
 
     def load(self, key, key_col=""):
         return dynamo_operator.get_item(self.table, key, key_col)
@@ -27,5 +26,5 @@ class DynamoTable(BaseStorage):
     def clear(self, key_col=""):
         return dynamo_operator.clear_table(self.table, key_col)
 
-    def list(self, bucket_name=""):
+    def list(self):
         return dynamo_operator.list_items(self.table)

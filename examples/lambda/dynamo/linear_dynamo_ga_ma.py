@@ -25,8 +25,8 @@ def handler(event, context):
     n_classes = event['n_classes']
     n_workers = event['n_workers']
     worker_index = event['worker_index']
-    tmp_bucket = event['tmp_bucket']
-    merged_bucket = event['merged_bucket']
+    tmp_table_name = event['tmp_table_name']
+    merged_table_name = event['merged_table_name']
 
     # training setting
     model_name = event['model']
@@ -53,8 +53,8 @@ def handler(event, context):
     print('optimization = {}'.format(optim))
     print('sync mode = {}'.format(sync_mode))
 
-    storage = S3Storage()
-    communicator = S3Communicator(storage, tmp_bucket, merged_bucket, n_workers, worker_index)
+    storage = S3Storage("s3")
+    communicator = S3Communicator(storage, tmp_table_name, merged_bucket, n_workers, worker_index)
 
     # Read file from s3
     read_start = time.time()
@@ -242,7 +242,7 @@ def handler(event, context):
                  n_test, 100. * n_test_correct / n_test, test_loss / n_test))
 
     if worker_index == 0:
-        storage.clear(tmp_bucket)
+        storage.clear(tmp_table_name)
         storage.clear(merged_bucket)
 
     end_time = time.time()

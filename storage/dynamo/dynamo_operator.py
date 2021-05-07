@@ -16,20 +16,21 @@ def get_table(tb_name):
     return get_client().Table(tb_name)
 
 
-def put_item(table, key, src_data):
+def put_item(table, key_col, key, src_data):
     """Add an object to a dynamodb table
-    The src_data argument must be of type bytes or a string that references a file specification.
+    The src_data argument must be of type bytes.
 
     :param table: dynamodb table
+    :param key_col: string
     :param key: string
-    :param src_data: bytes of data or string
+    :param src_data: bytes of data
     :return: True if src_data was added to table, otherwise False
     """
-    assert isinstance(src_data, bytes) or isinstance(src_data, str)
+    assert isinstance(src_data, bytes)
     try:
         table.put_item(
             Item={
-                'key': key,
+                key_col: key,
                 'value': src_data
             }
         )

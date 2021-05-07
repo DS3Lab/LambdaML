@@ -13,9 +13,8 @@ import torch.nn.functional as F
 import boto3
 
 from utils.constants import Prefix, MLModel, Optimization, Synchronization
-from storage.s3 import s3_operator
 from storage.s3.s3_type import S3Storage
-from communicator.communicator import S3Communicator
+from communicator import S3Communicator
 
 from model import deep_models
 from utils.metric import Accuracy, Average
@@ -68,7 +67,7 @@ def handler(event, context):
           .format(function_name, int(start_epoch/run_epochs) + 1, math.ceil(n_epochs / run_epochs),
                   start_epoch + 1, n_epochs, start_epoch + run_epochs, n_epochs))
 
-    storage = S3Storage("s3")
+    storage = S3Storage()
     communicator = S3Communicator(storage, tmp_bucket, merged_bucket, n_workers, worker_index)
 
     # download file from s3
