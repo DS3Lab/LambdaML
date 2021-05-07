@@ -5,10 +5,6 @@ from typing import Union, Iterator, List
 class BaseStorage(ABC):
 
     @abstractmethod
-    def __init__(self) -> None:
-        """TODO(milos) documentation"""
-
-    @abstractmethod
     def save(self, src_data: Union[str, bytes], key: str) -> bool:
         """TODO(milos) documentation"""
 

@@ -5,6 +5,7 @@ import boto3
 import pytest
 from botocore.exceptions import ClientError
 
+
 class TestS3(unittest.TestCase):
 
     @mock_s3
@@ -52,6 +53,7 @@ class TestS3(unittest.TestCase):
     @mock_s3
     def test_load(self):
         new_bucket = S3Bucket()
+        object_data = None
         try:
             object_data = open("tests/logo.png", 'rb')
             new_bucket.client.put_object(Bucket=new_bucket.name, Key="logo", Body=object_data)
@@ -65,9 +67,10 @@ class TestS3(unittest.TestCase):
     @mock_s3
     @pytest.mark.timeout(3)
     def test_load_or_wait_fail(self):
-        new_bucket = S3Bucket(timeout=0.5)
+        new_bucket = S3Bucket(timeout=1)
 
         # test object that exists
+        object_data = None
         try:
             object_data = open("tests/logo.png", 'rb')
             new_bucket.client.put_object(Bucket=new_bucket.name, Key="logo", Body=object_data)
@@ -86,6 +89,7 @@ class TestS3(unittest.TestCase):
     @mock_s3
     def test_delete(self):
         new_bucket = S3Bucket()
+        object_data = None
         try:
             # first save the file
             object_data = open("tests/logo.png", 'rb')
@@ -113,6 +117,7 @@ class TestS3(unittest.TestCase):
     @mock_s3
     def test_list(self):
         new_bucket = S3Bucket()
+        object_data = None
         try:
             # save two files
             object_data = open("tests/logo.png", 'rb')
@@ -129,6 +134,7 @@ class TestS3(unittest.TestCase):
     @mock_s3
     def test_clear(self):
         new_bucket = S3Bucket()
+        object_data = None
         try:
             # first save the files
             object_data = open("tests/logo.png", 'rb')
@@ -157,6 +163,7 @@ class TestS3(unittest.TestCase):
     @mock_s3
     def test_bucket_delete(self):
         new_bucket = S3Bucket()
+        object_data = None
         try:
             # first save the files
             object_data = open("tests/logo.png", 'rb')
