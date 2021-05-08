@@ -12,27 +12,20 @@ def handler(event, context):
     # dataset setting
     dataset_name = 'higgs'
     data_bucket = "higgs-10"
-    dataset_type = "dense_libsvm"   # dense_libsvm or sparse_libsvm
+    dataset_type = "dense_libsvm"
     n_features = 30
-    n_classes = 2
     tmp_table_name = "tmp-params"
     merged_table_name = "merged-params"
     key_col = "key"
 
-    # training setting
-    model = "lr"    # lr, svm, sparse_lr, or sparse_svm
-    optim = "grad_avg"  # grad_avg, model_avg, or admm
-    sync_mode = "reduce"    # async, reduce or reduce_scatter
-    n_workers = 10
-
     # hyper-parameters
-    lr = 0.01
-    batch_size = 100000
-    n_epochs = 2
-    valid_ratio = .2
-    n_admm_epochs = 2
-    lam = 0.01
-    rho = 0.01
+    n_clusters = 10
+    n_epochs = 10
+    threshold = 0.0001
+
+    # training setting
+    sync_mode = "reduce"    # reduce or reduce_scatter
+    n_workers = 10
 
     # clear dynamodb table
     dynamo_client = dynamo_operator.get_client()
@@ -47,21 +40,14 @@ def handler(event, context):
     payload['data_bucket'] = data_bucket
     payload['dataset_type'] = dataset_type
     payload['n_features'] = n_features
-    payload['n_classes'] = n_classes
-    payload['n_workers'] = n_workers
     payload['tmp_table_name'] = tmp_table_name
     payload['merged_table_name'] = merged_table_name
     payload['key_col'] = key_col
-    payload['model'] = model
-    payload['optim'] = optim
-    payload['sync_mode'] = sync_mode
-    payload['lr'] = lr
-    payload['batch_size'] = batch_size
+    payload['n_clusters'] = n_clusters
     payload['n_epochs'] = n_epochs
-    payload['valid_ratio'] = valid_ratio
-    payload['n_admm_epochs'] = n_admm_epochs
-    payload['lambda'] = lam
-    payload['rho'] = rho
+    payload['threshold'] = threshold
+    payload['sync_mode'] = sync_mode
+    payload['n_workers'] = n_workers
 
     # invoke functions
     lambda_client = boto3.client('lambda')

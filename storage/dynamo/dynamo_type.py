@@ -4,18 +4,19 @@ from storage.base import BaseStorage
 
 class DynamoTable(BaseStorage):
 
-    def __init__(self, _table_name):
+    def __init__(self, _client, _table_name):
         super(DynamoTable, self).__init__()
-        self.table = dynamo_operator.get_table(_table_name)
+        self.client = _client
+        self.table = dynamo_operator.get_table(self.client, _table_name)
 
     def save(self, src_data, key="", key_col=""):
         return dynamo_operator.put_item(self.table, key_col, key, src_data)
 
     def load(self, key, key_col=""):
-        return dynamo_operator.get_item(self.table, key, key_col)
+        return dynamo_operator.get_item(self.table, key_col, key)
 
     def load_or_wait(self, key, key_col="", sleep_time=0.1, time_out=60):
-        return dynamo_operator.get_item_or_wait(self.table, key, key_col, sleep_time, time_out)
+        return dynamo_operator.get_item_or_wait(self.table, key_col, key, sleep_time, time_out)
 
     def delete(self, key, key_col=""):
         if isinstance(key, str):

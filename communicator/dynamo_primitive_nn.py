@@ -10,7 +10,7 @@ def async_reduce(table, weight_bytes, key_col, key):
 
     table.save(weight_bytes, key, key_col)
 
-    new_weight_bytes = table.load_or_wait(key, key_col, 0.1)['value'].value.decode("utf-8")
+    new_weight_bytes = table.load_or_wait(key, key_col, 0.1)['value'].value
     new_weight = pickle.loads(new_weight_bytes)
 
     return new_weight
@@ -38,7 +38,7 @@ def reduce_batch(tmp_table, merged_table, weight_bytes, key_col, n_workers, work
                     key_epoch = key_splits[-2]
                     key_batch = key_splits[-1]
                     if key_epoch == str(cur_epoch) and key_batch == str(cur_batch):
-                        bytes_data = item['value'].value.decode("utf-8")
+                        bytes_data = item['value'].value
                         pickle_data = pickle.loads(bytes_data)
                         for i in range(len(pickle_data)):
                             if n_files == 0:
@@ -56,7 +56,7 @@ def reduce_batch(tmp_table, merged_table, weight_bytes, key_col, n_workers, work
 
     # read merged data
     merged_key = 'merged_{}'.format(my_key)
-    merged_data_bytes = merged_table.load_or_wait(merged_key, key_col, 0.1)['value'].value.decode("utf-8")
+    merged_data_bytes = merged_table.load_or_wait(merged_key, key_col, 0.1)['value'].value
     merged_weight = pickle.loads(merged_data_bytes)
 
     return merged_weight
@@ -83,7 +83,7 @@ def reduce_epoch(tmp_table, merged_table, weight_bytes, key_col, n_workers, work
                     key_splits = tmp_key.split("_")
                     key_epoch = key_splits[-1]
                     if key_epoch == str(cur_epoch):
-                        bytes_data = item['value'].value.decode("utf-8")
+                        bytes_data = item['value'].value
                         pickle_data = pickle.loads(bytes_data)
                         for i in range(len(pickle_data)):
                             if n_files == 0:
@@ -101,7 +101,7 @@ def reduce_epoch(tmp_table, merged_table, weight_bytes, key_col, n_workers, work
 
     # read merged data
     merged_key = 'merged_{}'.format(my_key)
-    merged_data_bytes = merged_table.load_or_wait(merged_key, key_col, 0.1)['value'].value.decode("utf-8")
+    merged_data_bytes = merged_table.load_or_wait(merged_key, key_col, 0.1)['value'].value
     merged_weight = pickle.loads(merged_data_bytes)
 
     return merged_weight
@@ -163,7 +163,7 @@ def reduce_scatter_batch(tmp_table, merged_table, weight_bytes, key_col, n_worke
                     key_epoch = key_splits[-2]
                     key_batch = key_splits[-1]
                     if key_epoch == str(cur_epoch) and key_batch == str(cur_batch):
-                        bytes_data = item['value'].value.decode("utf-8")
+                        bytes_data = item['value'].value
                         pickle_data = pickle.loads(bytes_data)
                         for i in range(len(pickle_data)):
                             if n_files == 0:
@@ -181,7 +181,7 @@ def reduce_scatter_batch(tmp_table, merged_table, weight_bytes, key_col, n_worke
 
     # read merged data
     merged_key = 'merged_{}'.format(my_key)
-    merged_data_bytes = merged_table.load_or_wait(merged_key, key_col, 0.1)['value'].value.decode("utf-8")
+    merged_data_bytes = merged_table.load_or_wait(merged_key, key_col, 0.1)['value'].value
     merged_weight = pickle.loads(merged_data_bytes)
 
     return merged_weight
@@ -208,7 +208,7 @@ def reduce_scatter_epoch(tmp_table, merged_table, weight_bytes, key_col, n_worke
                     key_splits = tmp_key.split("_")
                     key_epoch = key_splits[-1]
                     if key_epoch == str(cur_epoch):
-                        bytes_data = item['value'].value.decode("utf-8")
+                        bytes_data = item['value'].value
                         pickle_data = pickle.loads(bytes_data)
                         for i in range(len(pickle_data)):
                             if n_files == 0:
@@ -226,7 +226,7 @@ def reduce_scatter_epoch(tmp_table, merged_table, weight_bytes, key_col, n_worke
 
     # read merged data
     merged_key = 'merged_{}'.format(my_key)
-    merged_data_bytes = merged_table.load_or_wait(merged_key, key_col, 0.1)['value'].value.decode("utf-8")
+    merged_data_bytes = merged_table.load_or_wait(merged_key, key_col, 0.1)['value'].value
     merged_weight = pickle.loads(merged_data_bytes)
 
     return merged_weight

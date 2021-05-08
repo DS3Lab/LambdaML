@@ -8,12 +8,12 @@ from botocore.exceptions import ClientError
 
 
 def get_client():
-    dynamodb = boto3.resource('dynamo')
+    dynamodb = boto3.resource('dynamodb')
     return dynamodb
 
 
-def get_table(tb_name):
-    return get_client().Table(tb_name)
+def get_table(client, tb_name):
+    return client.Table(tb_name)
 
 
 def put_item(table, key_col, key, src_data):
@@ -30,12 +30,12 @@ def put_item(table, key_col, key, src_data):
     try:
         table.put_item(
             Item={
-                key_col: key,
+                '{}'.format(key_col): key,
                 'value': src_data
             }
         )
     except ClientError as e:
-        logging.error(e.response['Error']['Message'])
+        logging.error("put_item: {}".format(e.response['Error']['Message']))
         return False
     return True
 
@@ -52,7 +52,7 @@ def get_item(table, key_col, key):
     try:
         response = table.get_item(Key={'{}'.format(key_col): key})
     except ClientError as e:
-        logging.error(e.response['Error']['Message'])
+        logging.error("get_item: {}".format(e.response['Error']['Message']))
         return None
     return response['Item']
 
@@ -75,10 +75,10 @@ def get_item_or_wait(table, key_col, key, sleep_time, time_out=60):
             response = table.query(
                 KeyConditionExpression=Key(key_col).eq(key)
             )
-            if len(response['Items']) == 1:
+            if len(response['Items']) == 1 and response['Items'][0] is not None:
                 return response['Items'][0]
         except ClientError as e:
-            logging.error(e.response['Error']['Message'])
+            logging.error("get_item_or_wait: {}".format(e.response['Error']['Message']))
         time.sleep(sleep_time)
 
 

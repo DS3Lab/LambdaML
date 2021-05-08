@@ -11,9 +11,9 @@ def async_reduce(table, vector, key_col, vector_name):
     vec_shape = vector.shape
     vec_dtype = vector.dtype
 
-    data = table.load_or_wait(vector_name, key_col, 0.1)['value'].value.decode("utf-8")
+    data = table.load_or_wait(vector_name, key_col, 0.1)['value'].value
     new_vec = np.frombuffer(data, dtype=vec_dtype).reshape(vec_shape)
-    table.save(vector.tobytes(), key_col, vector_name)
+    table.save(vector.tobytes(), vector_name, key_col)
 
     return new_vec
 
@@ -44,19 +44,19 @@ def reduce_batch(tmp_table, merged_table, vector, key_col, n_workers, worker_ind
                     key_epoch = key_splits[-2]
                     key_batch = key_splits[-1]
                     if key_epoch == str(cur_epoch) and key_batch == str(cur_batch):
-                        bytes_data = item['value'].value.decode("utf-8")
+                        bytes_data = item['value'].value
                         tmp_vec = np.frombuffer(bytes_data, dtype=vec_dtype).reshape(vec_shape)
                         merged_vec += tmp_vec
                         n_files += 1
                         delete_keys.append(tmp_key)
                 tmp_table.delete(delete_keys, key_col)
         # write the merged data to merged table
-        merged_file_name = 'merged_{}'.format(my_key)
-        merged_table.save(merged_vec.tobytes(), merged_file_name, key_col)
+        merged_key = 'merged_{}'.format(my_key)
+        merged_table.save(merged_vec.tobytes(), merged_key, key_col)
         delete_expired_batch(merged_table, key_col, cur_epoch, cur_batch)
     else:
-        merged_file_name = 'merged_{}'.format(my_key)
-        merged_data = merged_table.load_or_wait(merged_file_name, key_col, 0.1)['value'].value.decode("utf-8")
+        merged_key = 'merged_{}'.format(my_key)
+        merged_data = merged_table.load_or_wait(merged_key, key_col, 0.1)['value'].value
         merged_vec = np.frombuffer(merged_data, dtype=vec_dtype).reshape(vec_shape)
 
     return merged_vec
@@ -72,8 +72,8 @@ def reduce_epoch(tmp_table, merged_table, vector, key_col, n_workers, worker_ind
     merged_vec = np.zeros(vec_shape, dtype=vec_dtype)
 
     # put object to tmp table, format of key: workerID_epoch
-    key = "{}_{}".format(worker_index, cur_epoch)
-    tmp_table.save(vector.tobytes(), key, key_col)
+    key = str(cur_epoch)
+    tmp_table.save(vector.tobytes(), "{}_{}".format(worker_index, key), key_col)
 
     # the first worker read and aggregate
     if worker_index == 0:
@@ -87,19 +87,19 @@ def reduce_epoch(tmp_table, merged_table, vector, key_col, n_workers, worker_ind
                     key_splits = tmp_key.split("_")
                     key_epoch = key_splits[-1]
                     if key_epoch == str(cur_epoch):
-                        bytes_data = item['value'].value.decode("utf-8")
+                        bytes_data = item['value'].value
                         tmp_vec = np.frombuffer(bytes_data, dtype=vec_dtype).reshape(vec_shape)
                         merged_vec += tmp_vec
                         n_files += 1
                         delete_keys.append(tmp_key)
                 tmp_table.delete(delete_keys, key_col)
         # write the merged data to merged table
-        merged_file_name = 'merged_{}'.format(key)
-        merged_table.save(merged_vec.tobytes(), merged_file_name, key_col)
+        merged_key = 'merged_{}'.format(key)
+        merged_table.save(merged_vec.tobytes(), merged_key, key_col)
         delete_expired_epoch(merged_table, key_col, cur_epoch)
     else:
-        merged_file_name = 'merged_{}'.format(key)
-        merged_data = merged_table.load_or_wait(merged_file_name, key_col, 0.1)['value'].value.decode("utf-8")
+        merged_key = 'merged_{}'.format(key)
+        merged_data = merged_table.load_or_wait(merged_key, key_col, 0.1)['value'].value
         merged_vec = np.frombuffer(merged_data, dtype=vec_dtype).reshape(vec_shape)
 
     return merged_vec
@@ -181,7 +181,7 @@ def reduce_scatter_batch(tmp_table, merged_table, vector, key_col, n_workers, wo
                 if key_splits[0] == str(worker_index) \
                         and key_splits[-2] == str(cur_epoch) \
                         and key_splits[-1] == str(cur_batch):
-                    bytes_data = tmp_item['value'].value.decode("utf-8")
+                    bytes_data = tmp_item['value'].value
                     tmp_vec = np.frombuffer(bytes_data, dtype=vector.dtype).reshape(my_chunk_shape)
                     my_chunk = my_chunk + tmp_vec
                     n_files += 1
@@ -208,9 +208,9 @@ def reduce_scatter_batch(tmp_table, merged_table, vector, key_col, n_workers, wo
                 key_splits = merged_key.split("_")
                 # key format in merged_bucket: chunkID_epoch_batch
                 # if not file_key.startswith(str(my_rank)) and merged_key not in already_read:
-                if key_splits[0] != str(worker_index) and key_splits[-2] == cur_epoch and \
-                        key_splits[-1] == cur_batch and merged_key not in read_keys:
-                    bytes_data = merged_item['value'].value.decode("utf-8")
+                if key_splits[0] != str(worker_index) and key_splits[-2] == str(cur_epoch) and \
+                        key_splits[-1] == str(cur_batch) and merged_key not in read_keys:
+                    bytes_data = merged_item['value'].value
                     merged_value[int(key_splits[0])] = np.frombuffer(bytes_data, dtype=vector.dtype)
                     read_keys.append(merged_key)
                     n_merged_keys += 1
@@ -261,7 +261,7 @@ def reduce_scatter_epoch(tmp_table, merged_table, vector, key_col, n_workers, wo
                 # if it's the responsible chunk and it is from the current step
                 # format of key in tmp-bucket: chunkID_workerID_epoch
                 if key_splits[0] == str(worker_index) and key_splits[-1] == str(cur_epoch):
-                    bytes_data = tmp_item['value'].value.decode("utf-8")
+                    bytes_data = tmp_item['value'].value
                     my_chunk = my_chunk + np.frombuffer(bytes_data, dtype=vector.dtype)
                     n_merged_keys += 1
             tmp_table.delete(delete_keys, key_col)
@@ -285,9 +285,9 @@ def reduce_scatter_epoch(tmp_table, merged_table, vector, key_col, n_workers, wo
                 key_splits = merged_key.split("_")
                 # key format in merged_bucket: chunkID_epoch
                 # if not file_key.startswith(str(my_rank)) and merged_key not in already_read:
-                if key_splits[0] != str(worker_index) and key_splits[-1] == cur_epoch \
+                if (key_splits[0]).isdigit() and key_splits[0] != str(worker_index) and key_splits[-1] == str(cur_epoch) \
                         and merged_key not in read_keys:
-                    bytes_data = merged_item['value'].value.decode("utf-8")
+                    bytes_data = merged_item['value'].value
                     merged_value[int(key_splits[0])] = np.frombuffer(bytes_data, dtype=vector.dtype)
                     read_keys.append(merged_key)
                     n_merged_keys += 1

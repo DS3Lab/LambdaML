@@ -4,8 +4,8 @@ from storage import DynamoTable
 
 class DynamoCommunicator(Communicator):
 
-    def __init__(self, _storage, _tmp_table, _merged_table, _key_col, _num_workers, _worker_index):
-        super(DynamoCommunicator, self).__init__(_storage)
+    def __init__(self, _client, _tmp_table, _merged_table, _key_col, _num_workers, _worker_index):
+        super(DynamoCommunicator, self).__init__(_client)
         self.tmp_table = _tmp_table
         self.merged_table = _merged_table
         assert isinstance(self.tmp_table, DynamoTable)

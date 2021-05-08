@@ -1,3 +1,4 @@
+from storage import S3Storage
 from communicator import Communicator
 from communicator import s3_primitive, s3_primitive_nn
 
