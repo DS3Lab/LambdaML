@@ -83,7 +83,7 @@ def get_object_v2(client, key, field):
     :return: direct bytestream, no need to read from buffer. If error, return None.
     """
     try:
-        mem_key = key + "_" + field
+        mem_key = field + "_" + key
         response = client.get(key=mem_key)
     except ClientError as e:
         # AllAccessDisabled error == client lost
@@ -99,6 +99,23 @@ def get_objects(client, keys):
     :param keys: list of strings
     :return: direct bytestream, no need to read from buffer. If error or timeout, return None.
     """
+    objects = client.get_multi(keys)
+    if bool(objects):
+        return objects
+    else:
+        return None
+
+
+def get_objects_v2(client, keys, field):
+    """Retrieve objects from configured memcached under specified keys
+
+    :param client: memcache client object
+    :param keys: list of strings
+    :param field: string
+    :return: direct bytestream, no need to read from buffer. If error or timeout, return None.
+    """
+    for k in keys:
+        k = field + "_" + k
     objects = client.get_multi(keys)
     if bool(objects):
         return objects
@@ -142,7 +159,7 @@ def get_object_or_wait_v2(client, key, field, sleep_time, time_out=60):
     """
     try:
         start_time = time.time()
-        mem_key = key + "_" + field
+        mem_key = field + "_" + key
         while True:
             if time.time() - start_time > time_out:
                 return None
@@ -194,7 +211,7 @@ def set_object_v2(client, key, field, src_data):
                       ' for the argument \'src_data\' is not supported.')
 
     try:
-        mem_key = key + "_" + field
+        mem_key = field + "_" + key
         response = client.set(mem_key, src_data)
     except ClientError as e:
         logging.error(e)
@@ -209,6 +226,23 @@ def list_keys(client, keys):
     :param keys: list of candidate keys
     :return: True if all keys exist, None otherwise
     """
+    objects = client.client.get_multi(keys)
+    if bool(objects):
+        return objects
+    else:
+        return None
+
+
+def list_keys_v2(client, keys, field):
+    """
+
+    :param client: string
+    :param keys: list of candidate keys
+    :param field: string
+    :return: True if all keys exist, None otherwise
+    """
+    for k in keys:
+        k = k + "_" + field
     objects = client.client.get_multi(keys)
     if bool(objects):
         return objects

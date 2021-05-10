@@ -11,6 +11,9 @@ class MemcachedStorage(BaseStorage):
     def save(self, src_data, key, **kwargs):
         return memcached_operator.set_object(self.client, key, src_data)
 
+    def save_v2(self, src_data, key, field):
+        return memcached_operator.set_object_v2(self.client, key, field, src_data)
+
     def load(self, key, **kwargs):
         return memcached_operator.get_object(self.client, key)
 
@@ -34,3 +37,4 @@ class MemcachedStorage(BaseStorage):
 
     def list(self, keys=[""]):
         return memcached_operator.list_keys(self.client, keys)
+

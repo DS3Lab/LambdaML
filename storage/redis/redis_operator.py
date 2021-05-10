@@ -13,7 +13,7 @@ def delete_keys(client, keys):
     """Delete keys in configured redis
 
     :param client: redis client object
-    :param keys: string or list of strings
+    :param fields: string or list of strings
     :return: True if the reference objects were deleted or don't exist, otherwise False
     """
 
@@ -26,17 +26,17 @@ def delete_keys(client, keys):
     return True
 
 
-def delete_fields(client, key, fields):
-    """delete the field within hash key in configured redis
+def hdelete_keys(client, field, keys):
+    """delete the keys within fields in configured redis
 
     :param client: redis client object
-    :param key: string
-    :param fields: string or list of strings
+    :param keys: string or list of strings
+    :param field: string
     :return: True if the reference objects were deleted or don't exist, otherwise False
     """
 
     try:
-        client.hdel(key, *fields)
+        client.hdel(field, *keys)
     except ClientError as e:
         # AllAccessDisabled error ==  client lost
         logging.error(e)
@@ -91,7 +91,7 @@ def get_object_or_wait(client, key, sleep_time, time_out=60):
         return None
 
 
-def hget_object(client, key, field):
+def hget_object(client, field, key):
     """Retrieve an object from configured redis under specified key and field
 
     :param client: redis client object
@@ -101,7 +101,7 @@ def hget_object(client, key, field):
     """
 
     try:
-        response = client.hget(name=key, key=field)
+        response = client.hget(name=field, key=key)
     except ClientError as e:
         # AllAccessDisabled error == client lost
         logging.error(e)
@@ -109,7 +109,7 @@ def hget_object(client, key, field):
     return response
 
 
-def hget_object_or_wait(client, key, field, sleep_time, time_out=60):
+def hget_object_or_wait(client, field, key, sleep_time, time_out=60):
     """Retrieve an object from configured redis under specified key and field; wait if not exist
 
     :param client: redis client object
@@ -128,7 +128,7 @@ def hget_object_or_wait(client, key, field, sleep_time, time_out=60):
         while True:
             if time.time() - start_time > time_out:
                 return None
-            response = client.hget(name=key, key=field)
+            response = client.hget(name=field, key=key)
             if response != None:
                 return response
             time.sleep(sleep_time)
@@ -158,17 +158,17 @@ def list_keys(client, count=1000):
     return None
 
 
-def hlist_keys(client, key, count=1000):
+def hlist_keys(client, field, count=1000):
     """list all the fields within hash key in configured redis
 
     :param client: redis client object
-    :param key: string
+    :param field: string
     :param count: maximum number of elements returned
     :return: list of fields in bytes, None if error. Maximum number of fields is 1000.
     """
 
     try:
-        response = client.hscan(name=key, count=count)
+        response = client.hscan(name=field, count=count)
         names = [*response[1]]
     except ClientError as e:
         # AllAccessDisabled error == endpoint or key not found
@@ -203,7 +203,7 @@ def set_object(client, key, src_data):
     return True
 
 
-def hset_object(client, key, field, src_data):
+def hset_object(client, field, key, src_data):
     """Add value from configured redis under specified key of certain hashtable
 
     :param client: redis client object
@@ -219,7 +219,7 @@ def hset_object(client, key, field, src_data):
                       ' for the argument \'src_data\' is not supported.')
 
     try:
-        response = client.hset(name=key, key=field, value=object_data)
+        response = client.hset(name=field, key=key, value=object_data)
     except ClientError as e:
         # AllAccessDisabled error == client lost
         logging.error(e)
