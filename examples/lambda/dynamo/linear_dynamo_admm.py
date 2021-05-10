@@ -8,8 +8,9 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from data_loader import libsvm_dataset
 
 from utils.constants import Prefix, MLModel, Optimization, Synchronization
-from storage.s3.s3_type import S3Storage
-from communicator import S3Communicator
+from storage import S3Storage, DynamoTable
+from storage.dynamo import dynamo_operator
+from communicator import DynamoCommunicator
 
 from model import linear_models
 
@@ -54,12 +55,14 @@ def handler(event, context):
     file = event['file']
     data_bucket = event['data_bucket']
     dataset_type = event['dataset_type']
+    assert dataset_type == "dense_libsvm"
     n_features = event['n_features']
     n_classes = event['n_classes']
     n_workers = event['n_workers']
     worker_index = event['worker_index']
-    tmp_bucket = event['tmp_bucket']
-    merged_bucket = event['merged_bucket']
+    tmp_table_name = event['tmp_table_name']
+    merged_table_name = event['merged_table_name']
+    key_col = event['key_col']
 
     # training setting
     model_name = event['model']
@@ -86,12 +89,15 @@ def handler(event, context):
     print('optimization = {}'.format(optim))
     print('sync mode = {}'.format(sync_mode))
 
-    storage = S3Storage()
-    communicator = S3Communicator(storage, tmp_bucket, merged_bucket, n_workers, worker_index)
+    s3_storage = S3Storage()
+    dynamo_client = dynamo_operator.get_client()
+    tmp_table = DynamoTable(dynamo_client, tmp_table_name)
+    merged_table = DynamoTable(dynamo_client, merged_table_name)
+    communicator = DynamoCommunicator(dynamo_client, tmp_table, merged_table, key_col, n_workers, worker_index)
 
     # Read file from s3
     read_start = time.time()
-    lines = storage.load(file, data_bucket).read().decode('utf-8').split("\n")
+    lines = s3_storage.load(file, data_bucket).read().decode('utf-8').split("\n")
     print("read data cost {} s".format(time.time() - read_start))
 
     parse_start = time.time()
@@ -141,7 +147,7 @@ def handler(event, context):
         print(">>> ADMM Epoch[{}]".format(admm_epoch))
         admm_epoch_start = time.time()
         admm_epoch_cal_time = 0
-        admm_epoch_sync_time = 0
+        admm_epoch_comm_time = 0
         admm_epoch_test_time = 0
         for epoch in range(n_epochs):
             epoch_start = time.time()
@@ -155,7 +161,7 @@ def handler(event, context):
                 optimizer.zero_grad()
                 outputs = model(items)
                 classify_loss = criterion(outputs, labels)
-                epoch_loss += classify_loss.data
+                epoch_loss += classify_loss.item()
                 u_z = torch.from_numpy(u) - torch.from_numpy(z)
                 loss = classify_loss
                 for name, param in model.named_parameters():
@@ -178,7 +184,7 @@ def handler(event, context):
                 items = Variable(items.view(-1, n_features))
                 labels = Variable(labels)
                 outputs = model(items)
-                test_loss += criterion(outputs, labels).data
+                test_loss += criterion(outputs, labels).item()
                 _, predicted = torch.max(outputs.data, 1)
                 n_test += labels.size(0)
                 n_test_correct += (predicted == labels).sum()
@@ -202,13 +208,11 @@ def handler(event, context):
         w_b = np.concatenate((w.flatten(), b.flatten()))
         u_w_b = np.concatenate((u.flatten(), w_b.flatten()))
 
-        postfix = "{}".format(admm_epoch)
-
         # admm does not support async
         if sync_mode == "reduce":
-            u_w_b_merge = communicator.reduce_epoch(u_w_b, postfix)
+            u_w_b_merge = communicator.reduce_epoch(u_w_b, admm_epoch)
         elif sync_mode == "reduce_scatter":
-            u_w_b_merge = communicator.reduce_scatter_epoch(u_w_b, postfix)
+            u_w_b_merge = communicator.reduce_scatter_epoch(u_w_b, admm_epoch)
 
         u_mean = u_w_b_merge[:u_shape[0] * u_shape[1]].reshape(u_shape) / float(n_workers)
         w_mean = u_w_b_merge[u_shape[0] * u_shape[1]: u_shape[0] * u_shape[1] + w_shape[0] * w_shape[1]]\
@@ -218,12 +222,12 @@ def handler(event, context):
 
         model.linear.weight.data = torch.from_numpy(w_mean)
         model.linear.bias.data = torch.from_numpy(b_mean)
-        admm_epoch_sync_time += time.time() - sync_start
+        admm_epoch_comm_time += time.time() - sync_start
 
         if worker_index == 0:
             delete_start = time.time()
             communicator.delete_expired_epoch(admm_epoch)
-            admm_epoch_sync_time += time.time() - delete_start
+            admm_epoch_comm_time += time.time() - delete_start
 
         # z, u, r, s = update_z_u(w, z, u, rho, num_workers, lam)
         # stop = check_stop(ep_abs, ep_rel, r, s, dataset_size, num_features, w, z, u, rho)
@@ -233,9 +237,9 @@ def handler(event, context):
         z = update_z(w_mean, u_mean, rho, n_workers, lam)
         u = u + model.linear.weight.data.numpy() - z
 
-        print("ADMM Epoch[{}] Epoch[{}] finishes, cost {} s, cal cost {} s, sync cost {} s, test cost {} s"
-              .format(admm_epoch, epoch, time.time() - admm_epoch_start,
-                      admm_epoch_cal_time, admm_epoch_sync_time, admm_epoch_test_time))
+        print("ADMM Epoch[{}] finishes, cost {} s, cal cost {} s, sync cost {} s, test cost {} s"
+              .format(admm_epoch, time.time() - admm_epoch_start,
+                      admm_epoch_cal_time, admm_epoch_comm_time, admm_epoch_test_time))
 
     # Test the Model
     n_test_correct = 0
@@ -245,7 +249,7 @@ def handler(event, context):
         items = Variable(items.view(-1, n_features))
         labels = Variable(labels)
         outputs = model(items)
-        test_loss += criterion(outputs, labels).data
+        test_loss += criterion(outputs, labels).item()
         _, predicted = torch.max(outputs.data, 1)
         n_test += labels.size(0)
         n_test_correct += (predicted == labels).sum()
@@ -254,8 +258,8 @@ def handler(event, context):
           % (time.time() - train_start, n_test, 100. * n_test_correct / n_test, test_loss / n_test))
 
     if worker_index == 0:
-        storage.clear(tmp_bucket)
-        storage.clear(merged_bucket)
+        s3_storage.clear(tmp_table_name)
+        s3_storage.clear(merged_table_name)
 
     end_time = time.time()
     print("Elapsed time = {} s".format(end_time - start_time))

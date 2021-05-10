@@ -6,7 +6,7 @@ from data_loader import libsvm_dataset
 
 from utils.constants import Prefix, Synchronization
 from storage.s3.s3_type import S3Storage
-from communicator.communicator import S3Communicator
+from communicator import S3Communicator
 
 from model import cluster_models
 from model.cluster_models import KMeans, SparseKMeans
@@ -103,7 +103,7 @@ def handler(event, context):
     print('num clusters = {}'.format(n_clusters))
     print('sync mode = {}'.format(sync_mode))
 
-    storage = S3Storage("s3")
+    storage = S3Storage()
     communicator = S3Communicator(storage, tmp_bucket, merged_bucket, n_workers, worker_index)
 
     # Reading data from S3

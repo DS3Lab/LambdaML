@@ -5,5 +5,4 @@ numpy
 matplotlib
 thrift
 redis
-python-memcached
 uuid

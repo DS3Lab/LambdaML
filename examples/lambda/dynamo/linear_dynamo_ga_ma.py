@@ -8,8 +8,8 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from data_loader import libsvm_dataset
 
 from utils.constants import Prefix, MLModel, Optimization, Synchronization
-from storage.s3.s3_type import S3Storage
-from communicator import S3Communicator
+from storage import S3Storage, DynamoTable, dynamo_operator
+from communicator import DynamoCommunicator
 
 from model import linear_models
 
@@ -21,12 +21,14 @@ def handler(event, context):
     file = event['file']
     data_bucket = event['data_bucket']
     dataset_type = event['dataset_type']
+    assert dataset_type == "dense_libsvm"
     n_features = event['n_features']
     n_classes = event['n_classes']
     n_workers = event['n_workers']
     worker_index = event['worker_index']
-    tmp_bucket = event['tmp_bucket']
-    merged_bucket = event['merged_bucket']
+    tmp_table_name = event['tmp_table_name']
+    merged_table_name = event['merged_table_name']
+    key_col = event['key_col']
 
     # training setting
     model_name = event['model']
@@ -53,12 +55,15 @@ def handler(event, context):
     print('optimization = {}'.format(optim))
     print('sync mode = {}'.format(sync_mode))
 
-    storage = S3Storage()
-    communicator = S3Communicator(storage, tmp_bucket, merged_bucket, n_workers, worker_index)
+    s3_storage = S3Storage()
+    dynamo_client = dynamo_operator.get_client()
+    tmp_table = DynamoTable(dynamo_client, tmp_table_name)
+    merged_table = DynamoTable(dynamo_client, merged_table_name)
+    communicator = DynamoCommunicator(dynamo_client, tmp_table, merged_table, key_col, n_workers, worker_index)
 
     # Read file from s3
     read_start = time.time()
-    lines = storage.load(file, data_bucket).read().decode('utf-8').split("\n")
+    lines = s3_storage.load(file, data_bucket).read().decode('utf-8').split("\n")
     print("read data cost {} s".format(time.time() - read_start))
 
     parse_start = time.time()
@@ -101,9 +106,9 @@ def handler(event, context):
     for epoch in range(n_epochs):
         epoch_start = time.time()
         epoch_cal_time = 0
-        epoch_sync_time = 0
+        epoch_comm_time = 0
         epoch_loss = 0
-        for batch_index, (items, labels) in enumerate(train_loader):
+        for batch_idx, (items, labels) in enumerate(train_loader):
             # print("------worker {} epoch {} batch {}------".format(worker_index, epoch, batch_index))
             batch_start = time.time()
             items = Variable(items.view(-1, n_features))
@@ -113,7 +118,7 @@ def handler(event, context):
             optimizer.zero_grad()
             outputs = model(items)
             loss = criterion(outputs, labels)
-            epoch_loss += loss.data
+            epoch_loss += loss.item()
             loss.backward()
 
             if optim == "grad_avg":
@@ -126,13 +131,12 @@ def handler(event, context):
                     batch_cal_time = time.time() - batch_start
                     epoch_cal_time += batch_cal_time
 
-                    batch_sync_start = time.time()
-                    postfix = "{}_{}".format(epoch, batch_index)
+                    batch_comm_start = time.time()
 
                     if sync_mode == "reduce":
-                        w_b_grad_merge = communicator.reduce_batch(w_b_grad, postfix)
+                        w_b_grad_merge = communicator.reduce_batch(w_b_grad, epoch, batch_idx)
                     elif sync_mode == "reduce_scatter":
-                        w_b_grad_merge = communicator.reduce_scatter_batch(w_b_grad, postfix)
+                        w_b_grad_merge = communicator.reduce_scatter_batch(w_b_grad, epoch, batch_idx)
 
                     w_grad_merge = w_b_grad_merge[:w_grad_shape[0] * w_grad_shape[1]]\
                                        .reshape(w_grad_shape) / float(n_workers)
@@ -141,9 +145,9 @@ def handler(event, context):
 
                     model.linear.weight.grad = Variable(torch.from_numpy(w_grad_merge))
                     model.linear.bias.grad = Variable(torch.from_numpy(b_grad_merge))
-                    batch_sync_time = time.time() - batch_sync_start
-                    print("one {} round cost {} s".format(sync_mode, batch_sync_time))
-                    epoch_sync_time += batch_sync_time
+                    batch_comm_time = time.time() - batch_comm_start
+                    print("one {} round cost {} s".format(sync_mode, batch_comm_time))
+                    epoch_comm_time += batch_comm_time
                 elif sync_mode == "async":
                     # async does step before sync
                     optimizer.step()
@@ -155,10 +159,10 @@ def handler(event, context):
                     batch_cal_time = time.time() - epoch_start
                     epoch_cal_time += batch_cal_time
 
-                    batch_sync_start = time.time()
+                    batch_comm_start = time.time()
                     # init model
-                    if worker_index == 0 and epoch == 0 and batch_index == 0:
-                        storage.save(w_b.tobytes(), Prefix.w_b_prefix, merged_bucket)
+                    if worker_index == 0 and epoch == 0 and batch_idx == 0:
+                        merged_table.save(w_b.tobytes(), Prefix.w_b_prefix, key_col)
 
                     w_b_merge = communicator.async_reduce(w_b, Prefix.w_b_prefix)
                     # do not need average
@@ -166,18 +170,19 @@ def handler(event, context):
                     b_merge = w_b_merge[w_shape[0] * w_shape[1]:].reshape(b_shape[0])
                     model.linear.weight.data = torch.from_numpy(w_merge)
                     model.linear.bias.data = torch.from_numpy(b_merge)
-                    batch_sync_time = time.time() - batch_sync_start
-                    print("one {} round cost {} s".format(sync_mode, batch_sync_time))
-                    epoch_sync_time += batch_sync_time
+                    batch_comm_time = time.time() - batch_comm_start
+                    print("one {} round cost {} s".format(sync_mode, batch_comm_time))
+                    epoch_comm_time += batch_comm_time
 
             if sync_mode != "async":
                 step_start = time.time()
                 optimizer.step()
                 epoch_cal_time += time.time() - step_start
 
-            # print('Epoch: [%d/%d], Step: [%d/%d], Time: %.4f s, Loss: %.4f, batch cost %.4f s'
-            #        % (epoch + 1, n_epochs, batch_index + 1, n_train_batch,
-            #           time.time() - train_start, loss.data, time.time() - batch_start))
+            if batch_idx % 10 == 0:
+                print("Epoch: [%d/%d], Step: [%d/%d], Time: %.4f s, Loss: %.4f, batch cost %.4f s"
+                      % (epoch + 1, n_epochs, batch_idx + 1, n_train_batch,
+                         time.time() - train_start, loss.item(), time.time() - batch_start))
 
         if optim == "model_avg":
             w = model.linear.weight.data.numpy()
@@ -187,16 +192,15 @@ def handler(event, context):
             w_b = np.concatenate((w.flatten(), b.flatten()))
             epoch_cal_time += time.time() - epoch_start
 
-            epoch_sync_start = time.time()
-            postfix = str(epoch)
+            epoch_comm_start = time.time()
 
             if sync_mode == "reduce":
-                w_b_merge = communicator.reduce_epoch(w_b, postfix)
+                w_b_merge = communicator.reduce_epoch(w_b, epoch)
             elif sync_mode == "reduce_scatter":
-                w_b_merge = communicator.reduce_scatter_epoch(w_b, postfix)
+                w_b_merge = communicator.reduce_scatter_epoch(w_b, epoch)
             elif sync_mode == "async":
-                if epoch == 0:
-                    storage.save(w_b.tobytes(), Prefix.w_b_prefix, merged_bucket)
+                if worker_index == 0 and epoch == 0:
+                    merged_table.save(w_b.tobytes(), Prefix.w_b_prefix, key_col)
                 w_b_merge = communicator.async_reduce(w_b, Prefix.w_b_prefix)
 
             w_merge = w_b_merge[:w_shape[0] * w_shape[1]].reshape(w_shape)
@@ -206,8 +210,8 @@ def handler(event, context):
                 b_merge = b_merge / float(n_workers)
             model.linear.weight.data = torch.from_numpy(w_merge)
             model.linear.bias.data = torch.from_numpy(b_merge)
-            print("one {} round cost {} s".format(sync_mode, time.time() - epoch_sync_start))
-            epoch_sync_time += time.time() - epoch_sync_start
+            print("one {} round cost {} s".format(sync_mode, time.time() - epoch_comm_start))
+            epoch_comm_time += time.time() - epoch_comm_start
 
         if worker_index == 0:
             delete_start = time.time()
@@ -215,8 +219,8 @@ def handler(event, context):
             if optim == "model_avg" and sync_mode != "async":
                 communicator.delete_expired_epoch(epoch)
             elif optim == "grad_avg" and sync_mode != "async":
-                communicator.delete_expired_batch(epoch, batch_index)
-            epoch_sync_time += time.time() - delete_start
+                communicator.delete_expired_batch(epoch, batch_idx)
+            epoch_comm_time += time.time() - delete_start
 
         # Test the Model
         test_start = time.time()
@@ -234,16 +238,16 @@ def handler(event, context):
         test_time = time.time() - test_start
 
         print('Epoch: [%d/%d], Step: [%d/%d], Time: %.4f, Loss: %.4f, epoch cost %.4f: '
-              'calculation cost = %.4f s, synchronization cost %.4f s, test cost %.4f s, '
+              'calculation cost = %.4f s, communication cost %.4f s, test cost %.4f s, '
               'accuracy of the model on the %d test samples: %d %%, loss = %f'
-              % (epoch + 1, n_epochs, batch_index + 1, n_train_batch,
-                 time.time() - train_start, epoch_loss.data, time.time() - epoch_start,
-                 epoch_cal_time, epoch_sync_time, test_time,
+              % (epoch + 1, n_epochs, batch_idx + 1, n_train_batch,
+                 time.time() - train_start, epoch_loss, time.time() - epoch_start,
+                 epoch_cal_time, epoch_comm_time, test_time,
                  n_test, 100. * n_test_correct / n_test, test_loss / n_test))
 
     if worker_index == 0:
-        storage.clear(tmp_bucket)
-        storage.clear(merged_bucket)
+        tmp_table.clear(key_col)
+        merged_table.clear(key_col)
 
     end_time = time.time()
     print("Elapsed time = {} s".format(end_time - start_time))

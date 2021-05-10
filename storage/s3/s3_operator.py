@@ -90,9 +90,8 @@ def delete_objects(s3_client, bucket_name, object_names):
 
 
 # Fetch an file from an Amazon S3 bucket to local path
-def download_file(s3_client, bucket_name, object_name, local_path):
+def download(s3_client, bucket_name, object_name, local_path):
     """Fetch an file to an Amazon S3 bucket to local path
-    The src_data argument must be of type bytes or a string that references a file specification.
 
     :param s3_client: s3 client object
     :param bucket_name: string
@@ -112,7 +111,7 @@ def download_file(s3_client, bucket_name, object_name, local_path):
     return True
 
 
-def upload_file(s3_client, bucket_name, object_name, local_path):
+def upload(s3_client, bucket_name, object_name, local_path):
     """Add a local file to an Amazon S3 bucket
 
     The src_data argument must be of type bytes or a string that references a file specification.

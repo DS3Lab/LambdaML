@@ -42,11 +42,11 @@ def reduce_batch(storage, input_bytes, tmp_bucket, merged_bucket, n_workers, wor
                     key_batch = key_splits[-1]
                     if key_epoch == str(curr_epoch) and key_batch == str(curr_batch):
                         data_bytes = storage.load(file_key, tmp_bucket).read()
-                        data = pickle.loads(data_bytes)
-                        for i in range(len(data)):
+                        pickle_data = pickle.loads(data_bytes)
+                        for i in range(len(pickle_data)):
                             if n_files == 0:
-                                merged_value.append(np.zeros(data[i].shape, dtype=data[i].dtype))
-                            merged_value[i] = merged_value[i] + data[i]
+                                merged_value.append(np.zeros(pickle_data[i].shape, dtype=pickle_data[i].dtype))
+                            merged_value[i] = merged_value[i] + pickle_data[i]
                         n_files = n_files + 1
                         delete_list.append(file_key)
                 storage.delete(delete_list, tmp_bucket)

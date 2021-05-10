@@ -1,21 +1,23 @@
 import boto3
 import json
 
-from storage.s3 import s3_operator
+from storage import DynamoTable, S3Storage
+from storage.dynamo import dynamo_operator
 
 
 def handler(event, context):
 
-    function_name = "LR_higgs"
+    function_name = "lambda_core"
 
     # dataset setting
     dataset_name = 'cifar10'
     data_bucket = "cifar10dataset"
     n_features = 32 * 32
     n_classes = 10
-    tmp_bucket = "tmp-params"
-    merged_bucket = "merged-params"
+    tmp_table_name = "tmp-params"
+    merged_table_name = "merged-params"
     cp_bucket = "cp-model"
+    key_col = "key"
 
     # training setting
     model = "mobilenet"     # mobilenet or resnet
@@ -30,10 +32,14 @@ def handler(event, context):
     start_epoch = 0
     run_epochs = 3
 
-    # clear s3 bucket
-    s3_client = s3_operator.get_client()
-    s3_operator.clear_bucket(s3_client, tmp_bucket)
-    s3_operator.clear_bucket(s3_client, merged_bucket)
+    # clear dynamodb table
+    s3_storage = S3Storage()
+    s3_storage.clear(cp_bucket)
+    dynamo_client = dynamo_operator.get_client()
+    tmp_tb = DynamoTable(dynamo_client, tmp_table_name)
+    merged_tb = DynamoTable(dynamo_client, tmp_table_name)
+    tmp_tb.clear(key_col)
+    merged_tb.clear(key_col)
 
     # lambda payload
     payload = dict()
@@ -42,8 +48,9 @@ def handler(event, context):
     payload['n_features'] = n_features
     payload['n_classes'] = n_classes
     payload['n_workers'] = n_workers
-    payload['tmp_bucket'] = tmp_bucket
-    payload['merged_bucket'] = merged_bucket
+    payload['tmp_table_name'] = tmp_table_name
+    payload['merged_table_name'] = merged_table_name
+    payload['key_col'] = key_col
     payload['cp_bucket'] = cp_bucket
     payload['model'] = model
     payload['optim'] = optim
