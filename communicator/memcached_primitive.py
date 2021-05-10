@@ -50,7 +50,8 @@ def reduce_batch(storage, vector, tmp_bucket, merged_bucket, num_workers, worker
                     key_batch = key_splits[3] 
                     if key_epoch == str(curr_epoch) and key_batch == str(curr_batch):
                         data = value
-                        bytes_data = np.frombuffer(data, dtype=vec_dtype).reshape(vec_shape)
+                        bytes_data = np.frombuffer(data, dtype=vec_dtype)
+                        tmp_vec = bytes_data.reshape(vec_shape)
                         merged_vec += tmp_vec
                         num_files += 1
                     delete_list.append(file_key)
