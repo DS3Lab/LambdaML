@@ -4,8 +4,8 @@ from storage.memcached import memcached_operator
 
 class MemcachedStorage(BaseStorage):
 
-    def __init__(self, name, ip, port=11211):
-        super(MemcachedStorage, self).__init__(name)
+    def __init__(self, ip, port=11211):
+        super(MemcachedStorage, self).__init__()
         self.client = memcached_operator.get_client(ip, port)
 
     def save(self, src_data, key, **kwargs):

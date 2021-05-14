@@ -52,7 +52,7 @@ class Communicator(object):
         """
 
 
-
+'''
 class S3Communicator(Communicator):
 
     def __init__(self, _storage, _tmp_bucket, _merged_bucket, _num_workers, _worker_index):
@@ -146,6 +146,7 @@ class MemcachedCommunicator(Communicator):
     def async_reduce_nn(self, data_bytes, object_name=""):
         return memcached_primitive_nn.async_reduce(self.storage, data_bytes, self.merged_bucket, object_name)
 
+
 class RedisCommunicator(Communicator):
 
     def __init__(self, _storage, _tmp_bucket, _merged_bucket, _num_workers, _worker_index):
@@ -191,3 +192,4 @@ class RedisCommunicator(Communicator):
 
     def async_reduce_nn(self, data_bytes, object_name=""):
         return redis_primitive_nn.async_reduce(self.storage, data_bytes, self.merged_bucket, object_name)
+'''

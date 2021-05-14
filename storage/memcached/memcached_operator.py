@@ -3,6 +3,8 @@ import time
 import memcache
 from botocore.exceptions import ClientError
 
+memcache.SERVER_MAX_VALUE_LENGTH = 128*1024*2014
+
 
 def get_client(ip, port=11211):
     try:
@@ -54,7 +56,7 @@ def clear_all(client):
 
     :param client: memcached client object
     """
-    client.flust_all()
+    client.flush_all()
     return True
 
 
@@ -165,6 +167,7 @@ def get_object_or_wait_v2(client, key, field, sleep_time, time_out=60):
                 return None
             response = client.get(key=mem_key)
             if response is not None:
+                #print("get key {}".format(mem_key))
                 return response
             time.sleep(sleep_time)
     except ClientError as e:
@@ -213,6 +216,7 @@ def set_object_v2(client, key, field, src_data):
     try:
         mem_key = field + "_" + key
         response = client.set(mem_key, src_data)
+        #print("set key {}, response = {}".format(mem_key, response))
     except ClientError as e:
         logging.error(e)
         return False
@@ -226,7 +230,7 @@ def list_keys(client, keys):
     :param keys: list of candidate keys
     :return: True if all keys exist, None otherwise
     """
-    objects = client.client.get_multi(keys)
+    objects = client.get_multi(keys)
     if bool(objects):
         return objects
     else:
@@ -243,7 +247,7 @@ def list_keys_v2(client, keys, field):
     """
     for k in keys:
         k = k + "_" + field
-    objects = client.client.get_multi(keys)
+    objects = client.get_multi(keys)
     if bool(objects):
         return objects
     else:
