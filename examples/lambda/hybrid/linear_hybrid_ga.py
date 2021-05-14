@@ -57,6 +57,8 @@ def handler(event, context):
     print('number of workers = {}'.format(n_workers))
     print('worker index = {}'.format(worker_index))
     print('model = {}'.format(model_name))
+    print('host = {}'.format(host))
+    print('port = {}'.format(port))
 
     # Set thrift connection
     # Make socket
@@ -156,6 +158,7 @@ def handler(event, context):
             optimizer.zero_grad()
             outputs = model(items)
             loss = criterion(outputs, labels)
+            epoch_loss += loss.item()
             loss.backward()
 
             # flatten and concat gradients of weight and bias
@@ -166,7 +169,8 @@ def handler(event, context):
             # push gradient to PS
             batch_comm_start = time.time()
             ps_client.can_push(t_client, model_name, iter_counter, worker_index)
-            ps_client.push_grad(t_client, model_name, w_b_grad, learning_rate, iter_counter, worker_index)
+            ps_client.push_grad(t_client, model_name, w_b_grad, -1. * learning_rate / n_workers,
+                                iter_counter, worker_index)
             ps_client.can_pull(t_client, model_name, iter_counter + 1, worker_index)  # sync all workers
             batch_comm_time += time.time() - batch_comm_start
 
@@ -201,7 +205,7 @@ def handler(event, context):
               'calculation cost = %.4f s, synchronization cost %.4f s, test cost %.4f s, '
               'accuracy of the model on the %d test samples: %d %%, loss = %f'
               % (epoch + 1, n_epochs, batch_idx + 1, n_train_batch,
-                 time.time() - train_start, epoch_loss.data, time.time() - epoch_start,
+                 time.time() - train_start, epoch_loss, time.time() - epoch_start,
                  epoch_cal_time, epoch_comm_time, test_time,
                  n_test, 100. * n_test_correct / n_test, test_loss / n_test))
 

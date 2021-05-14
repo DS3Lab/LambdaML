@@ -111,6 +111,8 @@ def handler(event, context):
     print('number of workers = {}'.format(n_workers))
     print('worker index = {}'.format(worker_index))
     print('num clusters = {}'.format(n_clusters))
+    print('host = {}'.format(host))
+    print('port = {}'.format(port))
 
     # Set thrift connection
     # Make socket
@@ -155,8 +157,8 @@ def handler(event, context):
         centroids = dataset[0:n_clusters].flatten()
         ps_client.can_push(t_client, model_name, 0, worker_index)
         ps_client.push_grad(t_client, model_name,
-                            np.append(centroids.flatten(), np.finfo(np.float32).max).astype(np.double),
-                            1, 0, worker_index)
+                            np.append(centroids.flatten(), 1000.).astype(np.double) - np.asarray(ps_model).astype(np.double),
+                            1.0, 0, worker_index)
 
     else:
         centroids = np.zeros(centroid_shape)
@@ -168,6 +170,7 @@ def handler(event, context):
     ps_model = ps_client.pull_model(t_client, model_name, 1, worker_index)
     cur_centroids = np.array(ps_model[0:-1]).astype(np.float32).reshape(centroid_shape)
     cur_error = float(ps_model[-1])
+    #print("init centroids = {}, error = {}".format(cur_centroids, cur_error))
     print("initial centroids cost {} s".format(time.time() - init_centroids_start))
 
     model = cluster_models.get_model(dataset, cur_centroids, dataset_type, n_features, n_clusters)
@@ -184,6 +187,7 @@ def handler(event, context):
         local_cent_error = np.concatenate((local_cent.astype(np.double).flatten(),
                                            np.array([model.error], dtype=np.double)))
         epoch_cal_time = time.time() - epoch_start
+        print("error after local update = {}".format(model.error))
 
         # push updates
         epoch_comm_start = time.time()
@@ -192,7 +196,7 @@ def handler(event, context):
         ps_model_inc = local_cent_error - last_cent_error
         ps_client.can_push(t_client, model_name, epoch, worker_index)
         ps_client.push_grad(t_client, model_name,
-                            ps_model_inc, 1 / n_workers, epoch, worker_index)
+                            ps_model_inc, 1.0 / n_workers, epoch, worker_index)
 
         # pull new model
         epoch_pull_start = time.time()

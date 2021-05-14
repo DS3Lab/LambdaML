@@ -59,6 +59,8 @@ def handler(event, context):
     print('number of workers = {}'.format(n_workers))
     print('worker index = {}'.format(worker_index))
     print('model = {}'.format(model_name))
+    print('host = {}'.format(host))
+    print('port = {}'.format(port))
 
     # Set thrift connection
     # Make socket
@@ -135,20 +137,20 @@ def handler(event, context):
             latest_model = ps_client.pull_model(t_client, model_name, iter_counter, worker_index)
             model.weight = torch.from_numpy(np.asarray(latest_model[:weight_length]).astype(np.float32)
                                             .reshape(n_features, 1))
-            model.bias = float(latest_model[weight_length:])
+            model.bias = float(latest_model[-1])
             batch_comm_time += time.time() - batch_start
 
             batch_loss, batch_acc = model.one_batch()
             epoch_loss += batch_loss.average
 
             w_b = np.concatenate((model.weight.double().numpy().flatten(), np.array([model.bias]).astype(np.double)))
-            w_b_update = w_b - latest_model
+            w_b_update = np.subtract(w_b, latest_model)
             batch_cal_time = time.time() - batch_start
 
             # push gradient to PS
             batch_comm_start = time.time()
             ps_client.can_push(t_client, model_name, iter_counter, worker_index)
-            ps_client.push_update(t_client, model_name, w_b_update, learning_rate, iter_counter, worker_index)
+            ps_client.push_grad(t_client, model_name, w_b_update, 1.0 / n_workers, iter_counter, worker_index)
             ps_client.can_pull(t_client, model_name, iter_counter + 1, worker_index)  # sync all workers
             batch_comm_time += time.time() - batch_comm_start
 
@@ -161,6 +163,8 @@ def handler(event, context):
                       % (epoch + 1, n_epochs, batch_idx + 1, n_train_batch,
                          time.time() - train_start, batch_loss.average, batch_acc.accuracy,
                          time.time() - batch_start, batch_cal_time, batch_comm_time))
+
+            iter_counter += 1
 
         # Test the Model
         test_start = time.time()

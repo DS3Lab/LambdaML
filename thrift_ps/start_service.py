@@ -1,21 +1,23 @@
 import sys
-sys.path.append("../")
 
-from thrift_ps.ps_service import ttypes
-from thrift_ps.ps_service import ParameterServer
+import argparse
 
 from thrift.transport import TSocket
 from thrift.transport import TTransport
 from thrift.protocol import TBinaryProtocol, TJSONProtocol
 from thrift.server import TServer
 
+sys.path.append("../")
+
+from thrift_ps.ps_service import ttypes
+from thrift_ps.ps_service import ParameterServer
+
 from thrift_ps.server.ps_server import PSHandler, PSHandler2
 from thrift_ps.model.model_moniter import ModelMonitor
 from thrift_ps import constants
 
-import argparse
 
-# python start_service.py --host 172.31.39.144 --port 27000 --interval 60 --expired 6000 --dir ~/tmp/lambda
+# python start_service.py --host 172.31.21.243 --port 27000 --interval 60 --expired 6000 --dir ~/tmp/lambda
 
 
 if __name__ == "__main__":

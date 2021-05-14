@@ -22,7 +22,7 @@ def handler(event, context):
     threshold = 0.0001
 
     # training setting
-    sync_mode = "reduce"    # reduce or reduce_scatter
+    sync_mode = "reduce"    # reduce
     n_workers = 10
 
     # lambda payload

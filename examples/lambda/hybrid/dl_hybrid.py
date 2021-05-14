@@ -70,6 +70,8 @@ def handler(event, context):
     print('sync mode = {}'.format(sync_mode))
     print('start epoch = {}'.format(start_epoch))
     print('run epochs = {}'.format(run_epochs))
+    print('host = {}'.format(host))
+    print('port = {}'.format(port))
 
     print("Run function {}, round: {}/{}, epoch: {}/{} to {}/{}"
           .format(function_name, int(start_epoch/run_epochs) + 1, math.ceil(n_epochs / run_epochs),
@@ -179,14 +181,15 @@ def handler(event, context):
                 # print("shape of layer = {}".format(param.data.numpy().flatten().shape))
                 param_grad = np.concatenate((param_grad, param.data.numpy().flatten()))
             param_grad = np.delete(param_grad, 0)
-            print("model_length = {}".format(param_grad.shape))
+            #print("model_length = {}".format(param_grad.shape))
             batch_cal_time += time.time() - batch_cal_start
 
             # push gradient to PS
             batch_push_start = time.time()
-            print(ps_client.can_push(t_client, model_name, iter_counter, worker_index))
-            print(ps_client.push_grad(t_client, model_name, param_grad, learning_rate, iter_counter, worker_index))
-            print(ps_client.can_pull(t_client, model_name, iter_counter + 1, worker_index))  # sync all workers
+            ps_client.can_push(t_client, model_name, iter_counter, worker_index)
+            ps_client.push_grad(t_client, model_name, param_grad, -1. * learning_rate / n_workers,
+                                iter_counter, worker_index)
+            ps_client.can_pull(t_client, model_name, iter_counter + 1, worker_index)  # sync all workers
             batch_comm_time += time.time() - batch_push_start
 
             train_acc.update(outputs, targets)
@@ -223,7 +226,7 @@ def handler(event, context):
 
         if worker_index == 0:
             torch.save(checkpoint_model, os.path.join(local_dir, checked_file))
-            storage.upload_file(cp_bucket, checked_file, os.path.join(local_dir, checked_file))
+            storage.upload(cp_bucket, checked_file, os.path.join(local_dir, checked_file))
             print("checkpoint model at epoch {} saved!".format(epoch))
 
         print("Invoking the next round of functions. round: {}/{}, start epoch: {}, run epoch: {}"

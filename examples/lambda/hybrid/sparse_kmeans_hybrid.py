@@ -112,6 +112,8 @@ def handler(event, context):
     print('number of workers = {}'.format(n_workers))
     print('worker index = {}'.format(worker_index))
     print('num clusters = {}'.format(n_clusters))
+    print('host = {}'.format(host))
+    print('port = {}'.format(port))
 
     # Set thrift connection
     # Make socket
@@ -157,8 +159,8 @@ def handler(event, context):
         centroids_np = sparse_centroid_to_numpy(train_set[0:n_clusters], n_clusters)
         ps_client.can_push(t_client, model_name, 0, worker_index)
         ps_client.push_grad(t_client, model_name,
-                            np.append(centroids_np.flatten(), np.finfo(np.float32).max).astype(np.double),
-                            1, 0, worker_index)
+                            np.append(centroids_np.flatten(), 1000.).astype(np.double) - np.asarray(ps_model).astype(np.double),
+                            1., 0, worker_index)
     else:
         centroids_np = np.zeros(centroid_shape)
         ps_client.can_push(t_client, model_name, 0, worker_index)
@@ -171,12 +173,10 @@ def handler(event, context):
     cur_error = float(ps_model[-1])
     print("initial centroids cost {} s".format(time.time() - init_centroids_start))
 
-    model = cluster_models.get_model(dataset, torch.from_numpy(cur_centroids), dataset_type,
+    model = cluster_models.get_model(train_set, torch.from_numpy(cur_centroids), dataset_type,
                                      n_features, n_clusters)
 
     train_start = time.time()
-    cal_time = 0
-    comm_time = 0
     for epoch in range(1, n_epochs + 1):
         epoch_start = time.time()
 
@@ -194,7 +194,7 @@ def handler(event, context):
         ps_model_inc = local_cent_error - last_cent_error
         ps_client.can_push(t_client, model_name, epoch, worker_index)
         ps_client.push_grad(t_client, model_name,
-                            ps_model_inc, 1 / n_workers, epoch, worker_index)
+                            ps_model_inc, 1. / n_workers, epoch, worker_index)
 
         # pull new model
         ps_client.can_pull(t_client, model_name, epoch + 1, worker_index)   # sync all workers
