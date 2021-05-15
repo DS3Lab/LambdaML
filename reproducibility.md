@@ -7,7 +7,7 @@ This document shows the workloads in the LambdaML paper [1] and describes how to
 ### Linear models
 
 - Trigger function: 
-[linear_s3_trigger.py](examples/s3/linear_s3_trigger.py). 
+[linear_s3_trigger.py](examples/lambda/s3/linear_s3_trigger.py). 
     - Set *data_bucket* and *file* according to the specific dataset.
     - Set *dataset_type* to dense_libsvm for dense dataset or sparse_libsvm for sparse dataset.
     - Set *model* to lr/svm for dense model or sparse_lr/sparse_svm for sparse model.
@@ -15,10 +15,10 @@ This document shows the workloads in the LambdaML paper [1] and describes how to
     - Set *sync_mode* to reduce, reduce_scatter or async.
     - Set other configurations and hyperparameters.
 - Execution function. Choose the execution function according to sparsity and optimization algorithm.
-    - Dense model, SGD or Model Average. [linear_s3_ga_ma.py](examples/s3/linear_s3_ga_ma.py)
-    - Dense model, ADMM. [linear_s3_admm.py](examples/s3/linear_s3_admm.py)
-    - Sparse model, SGD or Model Average. [sparse_linear_s3_ga_ma.py](examples/s3/sparse_linear_s3_ga_ma.py)
-    - Sparse model, ADMM. [sparse_linear_s3_admm.py](examples/s3/sparse_linear_s3_admm.py)
+    - Dense model, SGD or Model Average. [linear_s3_ga_ma.py](examples/lambda/s3/linear_s3_ga_ma.py)
+    - Dense model, ADMM. [linear_s3_admm.py](examples/lambda/s3/linear_s3_admm.py)
+    - Sparse model, SGD or Model Average. [sparse_linear_s3_ga_ma.py](examples/lambda/s3/sparse_linear_s3_ga_ma.py)
+    - Sparse model, ADMM. [sparse_linear_s3_admm.py](examples/lambda/s3/sparse_linear_s3_admm.py)
 
     
 ### KMeans
