@@ -12,7 +12,7 @@ def handler(event, context):
     # dataset setting
     dataset_name = 'higgs'
     data_bucket = "higgs-10"
-    dataset_type = "dense_libsvm"   # dense_libsvm or sparse_libsvm
+    dataset_type = "dense_libsvm"   # dense_libsvm
     n_features = 30
     n_classes = 2
     tmp_table_name = "tmp-params"
@@ -20,7 +20,7 @@ def handler(event, context):
     key_col = "key"
 
     # training setting
-    model = "lr"    # lr, svm, sparse_lr, or sparse_svm
+    model = "lr"    # lr, svm
     optim = "grad_avg"  # grad_avg, model_avg, or admm
     sync_mode = "reduce"    # async, reduce or reduce_scatter
     n_workers = 10

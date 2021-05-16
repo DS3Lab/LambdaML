@@ -8,14 +8,19 @@ To solve this problem, LambdaML implements various communication patterns using 
 
 ## Dependencies
 - awscli (version 1)
+- botocore
 - boto3
 - numpy
 - torch=1.0.1
+- thrift
+- redis
+- grpcio
 
 ## Environment setup
 
 - Create a Lambda layer with PyTorch 1.0.1.
 - Compress the whole project and upload to Lambda.
+- Create a VPC and a security group in AWS.
 
 ## Programming Interface
 
