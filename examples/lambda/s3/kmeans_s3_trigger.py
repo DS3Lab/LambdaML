@@ -17,7 +17,7 @@ def handler(event, context):
     merged_bucket = "merged-params"
 
     # hyper-parameters
-    n_clusters = 10
+    n_clusters = 3
     n_epochs = 10
     threshold = 0.0001
 
