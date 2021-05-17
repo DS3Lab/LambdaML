@@ -150,7 +150,6 @@ We use a VM as a parameter server and let serverless instances communicate with 
     - Dense model, SGD. [linear_hybrid_ga.py](examples/lambda/hybrid/linear_hybrid_ga.py)
     - Sparse model, SGD. [sparse_linear_hybrid_ga.py](examples/lambda/hybrid/sparse_linear_hybrid_ga.py)
 - Add the same VPC and security group to the trigger function, the execution, and the parameter server.
-- If the model size is larger than 1MB, change the value of *max_item_size* in the parameter group of Elasticache.
 
 ### KMeans
 - Launch a parameter server using [start_service.py](thrift_ps/start_service.py).
