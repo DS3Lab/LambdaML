@@ -31,23 +31,23 @@ We provide both storage interfaces and communication primitives.
 
 The storage layer offers basic operations to manipulate external storage.
 
-- S3 (storage/s3/s3_type.py). storage operations: list/save/load/delete/clear/...
-- Elasticache (storage/memcached/memcached_type.py). storage operations: list/save/load/delete/clear/...
-- DynamoDB (storage/dynamo/dynamo_type.py). storage operations: list/save/load/delete/clear/...
+- S3 ([storage/s3/s3_type.py](storage/s3/s3_type.py)). storage operations: list/save/load/delete/clear/...
+- Elasticache ([storage/memcached/memcached_type.py](storage/memcached/memcached_type.py)). storage operations: list/save/load/delete/clear/...
+- DynamoDB ([storage/dynamo/dynamo_type.py](storage/dynamo/dynamo_type.py)). storage operations: list/save/load/delete/clear/...
 
 ### Communication primitive
 
 The communication layer provides popular communication primitives.
 
-- S3 communicator (communicator/s3_comm.py). primitives: async/reduce/reduce_scatter.
-- Elasticache communicator (communicator/memcached_comm.py). primitives: async/reduce/reduce_scatter.
-- DynamoDB communicator (communicator/dynamo_comm.py). primitives: async/reduce/reduce_scatter.
+- S3 communicator ([communicator/s3_comm.py](communicator/s3_comm.py)). primitives: async/reduce/reduce_scatter.
+- Elasticache communicator ([communicator/memcached_comm.py](communicator/memcached_comm.py)). primitives: async/reduce/reduce_scatter.
+- DynamoDB communicator ([communicator/dynamo_comm.py](communicator/dynamo_comm.py)). primitives: async/reduce/reduce_scatter.
 
 ### Hybrid framework.
 
 In addition to storage services, LambdaML also implements a hybrid architecture ---
 one VM acts as a parameter server and serverless instances communicate with the VM.
-- Launch parameter server. see thrift_ps/start_service.py
+- Launch parameter server. see [thrift_ps/start_service.py](thrift_ps/start_service.py)
 - Communication interfaces: ping/register/pull/push/delete.
 
 ## Usage
@@ -58,5 +58,15 @@ The general usage of LambdaML:
 3. Set configurations (e.g., dataset location) and hyperparameters (e.g., learning rate).
 4. Set VPC and security group.
 5. Execute the trigger function.
+6. See the logs in CloudWatch.
 
 See [examples](reproducibility.md) for more details.
+
+## Contact
+
+If you have any question or suggestion, feel free to contact jiawei.jiang@inf.ethz.ch.
+
+
+## Reference
+Jiawei Jiang, Shaoduo Gan, Yue Liu, Fanlin Wang, Gustavo Alonso, Ana Klimovic, Ankit Singla, Wentao Wu, Ce Zhang.
+Towards Demystifying Serverless Machine Learning Training. SIGMOD 2021 (to appear).
