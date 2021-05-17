@@ -2,5 +2,6 @@ torch>=1.0.1
 botocore
 boto3
 numpy
-matplotlib
 thrift
+redis
+uuid

@@ -42,7 +42,7 @@ class PSHandler:
         print('ping()')
 
     def register_model(self, mid, length, parallelism):
-        self.models[mid] = np.random.rand(length)
+        self.models[mid] = 0.2 * np.random.rand(length) - 0.1
         self.model_ts[mid] = time.time()
         self.model_parallelism[mid] = parallelism
         self.model_pull_count[mid] = 0
