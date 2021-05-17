@@ -64,7 +64,7 @@ See [examples](reproducibility.md) for more details.
 
 ## Contact
 
-If you have any question or suggestion, feel free to contact jiawei.jiang@inf.ethz.ch.
+If you have any question or suggestion, feel free to contact jiawei.jiang@inf.ethz.ch and ce.zhang@inf.ethz.ch.
 
 
 ## Reference
