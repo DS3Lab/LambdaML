@@ -69,4 +69,4 @@ If you have any question or suggestion, feel free to contact jiawei.jiang@inf.et
 
 ## Reference
 Jiawei Jiang, Shaoduo Gan, Yue Liu, Fanlin Wang, Gustavo Alonso, Ana Klimovic, Ankit Singla, Wentao Wu, Ce Zhang.
-[Towards Demystifying Serverless Machine Learning Training](https://www.microsoft.com/en-us/research/publication/towards-demystifying-serverless-machine-learning-training/). *SIGMOD* 2021.
+[Towards Demystifying Serverless Machine Learning Training](https://arxiv.org/abs/2105.07806). *SIGMOD* 2021.
