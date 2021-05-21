@@ -76,9 +76,9 @@ We provide several video tutorials on YouTube.
 
 ## Contact
 
-If you have any question or suggestion, feel free to contact jiawei.jiang@inf.ethz.ch.
+If you have any question or suggestion, feel free to contact jiawei.jiang@inf.ethz.ch and ce.zhang@inf.ethz.ch.
 
 
 ## Reference
 Jiawei Jiang, Shaoduo Gan, Yue Liu, Fanlin Wang, Gustavo Alonso, Ana Klimovic, Ankit Singla, Wentao Wu, Ce Zhang.
-Towards Demystifying Serverless Machine Learning Training. SIGMOD 2021 (to appear).
+[Towards Demystifying Serverless Machine Learning Training](https://arxiv.org/abs/2105.07806). *SIGMOD* 2021.
