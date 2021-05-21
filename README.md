@@ -6,6 +6,18 @@ Different from VM-based cloud compute, compute instances in serverless infrastru
 To solve this problem, LambdaML implements various communication patterns using external storage.
 
 
+## Video Tutorials
+
+We provide several video tutorials on YouTube.
+
+- [Introduction to LambdaML](https://youtu.be/yUzzdp4IY7k)
+- [Programming Interface](https://youtu.be/YU0974fViSU)
+- [Deploying LambdaML with S3](https://youtu.be/E_kzXTm32EM)
+- [Deploying LambdaML with ElastiCache](https://youtu.be/58PMo2N8rxA)
+- [Deploying LambdaML with DynamoDB](https://youtu.be/mWa3NpCcEDU)
+- [Deploying LambdaML with Hybrid Parameter Server](https://youtu.be/gjmEV0RCaak)
+
+
 ## Dependencies
 - awscli (version 1)
 - botocore
@@ -62,17 +74,6 @@ The general usage of LambdaML:
 
 See [examples](reproducibility.md) for more details.
 
-
-## Video Tutorials
-
-We provide several video tutorials on YouTube.
-
-- [Introduction to LambdaML](https://youtu.be/yUzzdp4IY7k)
-- [Programming Interface](https://youtu.be/YU0974fViSU)
-- [Deploying LambdaML with S3](https://youtu.be/E_kzXTm32EM)
-- [Deploying LambdaML with ElastiCache](https://youtu.be/58PMo2N8rxA)
-- [Deploying LambdaML with DynamoDB](https://youtu.be/mWa3NpCcEDU)
-- [Deploying LambdaML with Hybrid Parameter Server](https://youtu.be/gjmEV0RCaak)
 
 ## Contact
 
