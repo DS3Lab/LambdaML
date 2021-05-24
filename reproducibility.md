@@ -36,7 +36,7 @@ We use S3 storage as external storage to implement communication in serverless i
 
 ### CNN models
 - Trigger function.
-[dl_s3_trigger.py](examples/lambda/s3/kmeans_s3_trigger.py). 
+[dl_s3_trigger.py](examples/lambda/s3/dl_s3_trigger.py). 
     - Set *data_bucket*, *train_file* and test_file according to the specific dataset.
     - Set *model* to mobilenet or resnet.
     - Set *optim* to grad_avg for gradient average (SGD) or model_avg for model average.
