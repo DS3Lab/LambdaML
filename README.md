@@ -70,3 +70,20 @@ If you have any question or suggestion, feel free to contact jiawei.jiang@inf.et
 ## Reference
 Jiawei Jiang, Shaoduo Gan, Yue Liu, Fanlin Wang, Gustavo Alonso, Ana Klimovic, Ankit Singla, Wentao Wu, Ce Zhang.
 [Towards Demystifying Serverless Machine Learning Training](https://arxiv.org/abs/2105.07806). *SIGMOD* 2021.
+
+# Project overview (deadline June 17th)
+## Design
+Based on the results presented in the LambdaML paper, we select the default for the top level classes. However, the user of the library should be allowed to change these in order to perform the experiments themselves.
+NOTE: Implementing the structures bottom -> top.
+Class hierarchy (top to bottom):
+* Abstract class Training - Implemented in GaSGD, MaSGD, ADMM
+  * Abstract class Communication - Implemented in SyncAllReduce, AsyncAllReduce, SyncScatterReduce, AsyncScatterReduce
+    * Abstract class Storage - Implemented in S3, Redis, Memcached, DynamoDB
+      * Other AWS primitives that might be helpful (for example some code from `data_loader`)
+
+### Goals
+- Training mobilenet using all 4 storage techniques
+- Follow Liskov Substitution Principle and include type hinting to the exported functions
+- Add integration tests, and check mypy in the integration test
+- Add unit tests for every module that is exported
+- Add all of the nice checks into the readme, for example test coverage, following pep etc.
