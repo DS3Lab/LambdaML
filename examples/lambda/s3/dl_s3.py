@@ -135,7 +135,7 @@ def handler(event, context):
 
         if worker_index == 0:
             torch.save(checkpoint_model, os.path.join(local_dir, checked_file))
-            storage.upload_file(cp_bucket, checked_file, os.path.join(local_dir, checked_file))
+            storage.upload(cp_bucket, checked_file, os.path.join(local_dir, checked_file))
             print("checkpoint model at epoch {} saved!".format(epoch))
 
         print("Invoking the next round of functions. round: {}/{}, start epoch: {}, run epoch: {}"
