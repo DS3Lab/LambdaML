@@ -179,6 +179,7 @@ def handler(event, context):
             param_grad = np.zeros((1))
             for param in model.parameters():
                 # print("shape of layer = {}".format(param.data.numpy().flatten().shape))
+                # NOTE(milos) this is very slow since np.concatenate creates a new array every time
                 param_grad = np.concatenate((param_grad, param.data.numpy().flatten()))
             param_grad = np.delete(param_grad, 0)
             #print("model_length = {}".format(param_grad.shape))
