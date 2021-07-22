@@ -218,7 +218,12 @@ def train_one_epoch(epoch, net, train_loader, optimizer, worker_index, n_workers
 
         batch_comm_start = time.time()
         postfix = "{}_{}".format(epoch, batch_idx)
-        merged_grads_vec = communicator.reduce_batch(grads_vector, postfix)
+        if sync_mode == "reduce":
+            merged_grads_vec = communicator.reduce_batch(grads_vector, postfix)
+        elif sync_mode == "reduce_scatter":
+            merged_grads_vec = communicator.reduce_scatter_batch(grads_vector, postfix)
+        else:
+            raise ValueError("Synchronization mode has to be either reduce or reduce_scatter")
 
         # reconstruct the gradient from the 1-d vector
         curr = 0

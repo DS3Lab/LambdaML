@@ -206,6 +206,7 @@ def train_one_epoch(epoch, net, train_loader, optimizer, worker_index,
                 if sync_mode == "reduce":
                     merged_grads = communicator.reduce_batch_nn(pickle.dumps(grads), postfix)
                 elif sync_mode == "reduce_scatter":
+                    # NOTE(milos) I think this should be reduce_scatter_batch_nn, but this is not in s3_comm
                     merged_grads = communicator.reduce_batch_nn(pickle.dumps(grads), postfix)
 
                 for layer_index, param in enumerate(net.parameters()):
