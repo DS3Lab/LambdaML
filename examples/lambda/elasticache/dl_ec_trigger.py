@@ -6,14 +6,14 @@ from storage.memcached import memcached_operator
 
 def handler(event, context):
 
-    function_name = "lambda_core"
+    function_name = "Insert Lambda Function Name"
 
     # dataset setting
     dataset_name = 'cifar10'
     data_bucket = "cifar10dataset"
     n_features = 32 * 32
     n_classes = 10
-    host = "127.0.0.1"
+    host = "Insert Node Endpoint Here"
     port = 11211
     tmp_bucket = "tmp-params"
     merged_bucket = "merged-params"
