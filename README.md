@@ -17,6 +17,14 @@ We provide several video tutorials on YouTube.
 - [Deploying LambdaML with DynamoDB](https://youtu.be/mWa3NpCcEDU)
 - [Deploying LambdaML with Hybrid Parameter Server](https://youtu.be/gjmEV0RCaak)
 
+### Development notes
+- Two AWS Lambda functions are needed - Trigger and Execution function. Trigger function is used to invoke the workers, which then execute the code of the Execution Function. The Trigger function requires the name of the Execution function in order to invoke it.
+- The only functionality that Trigger Function needs to be able to perform is to invoke AWS Lambda Functions. If it is not in the VPC, the execution role needs to have permissions to invoke Lambdas. If it is in the VPC, it also needs a VPC Endpoint Interface to access AWS Lambda.
+- Regardless of the choice for storage (S3, Elasticache or DynamoDB), Execution function needs to be able to access S3 buckets. If it is not in the VPC, the execution role needs to have permissions to access S3. If it is in the VPC, it also needs a VPC Endpoint Gateway to access S3.
+- Since Elasticache is designed to be used internally inside a VPC, if Memcached or Redis are your choice for storage, you need to have your Execution function inside a VPC.
+- Due to the size requirement for the code inside a Lambda Function (50MB), you can't zip the whole LambdaML and upload it to the function. Instead, only zip the packages that you need for your project.
+- In the case of Memcached, you need to change the maximum file size in the parameter group. Consider watching the ElastiCache video for more details.
+
 
 ## Dependencies
 - awscli (version 1)
