@@ -313,7 +313,7 @@ _VALUE_CHECKERS = {
 
 # Map from field type to a function F, such that F(field_num, value)
 # gives the total byte size for a value of the given type.  This
-# byte size includes tag information and any other additional space
+# byte size includes tag information and any other additional config
 # associated with serializing "value".
 TYPE_TO_BYTE_SIZE_FN = {
     _FieldDescriptor.TYPE_DOUBLE: wire_format.DoubleByteSize,

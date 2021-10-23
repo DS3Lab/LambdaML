@@ -1029,8 +1029,8 @@ def _AddUnicodeMethod(unused_message_descriptor, cls):
 
 def _BytesForNonRepeatedElement(value, field_number, field_type):
   """Returns the number of bytes needed to serialize a non-repeated element.
-  The returned byte count includes space for tag information and any
-  other additional space associated with serializing value.
+  The returned byte count includes config for tag information and any
+  other additional config associated with serializing value.
 
   Args:
     value: Value we're serializing.
