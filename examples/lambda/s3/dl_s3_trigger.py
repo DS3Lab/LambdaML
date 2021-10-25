@@ -6,7 +6,7 @@ from storage.s3 import s3_operator
 
 def handler(event, context):
 
-    function_name = "LR_higgs"
+    function_name = "lambda_core"
 
     # dataset setting
     dataset_name = 'cifar10'

@@ -13,11 +13,13 @@ import torch.nn.functional as F
 import boto3
 
 from utils.constants import Prefix, MLModel, Optimization, Synchronization
-from storage import S3Storage
-from communicator import S3Communicator
+from storage import S3Storage, MemcachedStorage
+from communicator import MemcachedCommunicator
 
 from storage import DynamoTable
 from storage.dynamo import dynamo_operator
+
+from data_loader import cifar10_dataset
 
 from model import deep_models
 from utils.metric import Accuracy, Average
@@ -34,6 +36,8 @@ def handler(event, context):
     n_classes = event['n_classes']
     n_workers = event['n_workers']
     worker_index = event['worker_index']
+    host = event['host']
+    port = event['port']
     tmp_bucket = event['tmp_bucket']
     merged_bucket = event['merged_bucket']
     cp_bucket = event['cp_bucket']
@@ -43,7 +47,7 @@ def handler(event, context):
     optim = event['optim']
     sync_mode = event['sync_mode']
     assert model_name.lower() in MLModel.Deep_Models
-    assert optim.lower() in Optimization.All
+    assert optim.lower() in [Optimization.Grad_Avg, Optimization.Model_Avg]
     assert sync_mode.lower() in Synchronization.All
 
     # hyper-parameter
@@ -65,19 +69,26 @@ def handler(event, context):
     print('sync mode = {}'.format(sync_mode))
     print('start epoch = {}'.format(start_epoch))
     print('run epochs = {}'.format(run_epochs))
+    print('host = {}'.format(host))
+    print('port = {}'.format(port))
 
     print("Run function {}, round: {}/{}, epoch: {}/{} to {}/{}"
           .format(function_name, int(start_epoch/run_epochs) + 1, math.ceil(n_epochs / run_epochs),
                   start_epoch + 1, n_epochs, start_epoch + run_epochs, n_epochs))
 
-    storage = S3Storage()
-    communicator = S3Communicator(storage, tmp_bucket, merged_bucket, n_workers, worker_index)
+    s3_storage = S3Storage()
+    mem_storage = MemcachedStorage(host, port)
+    communicator = MemcachedCommunicator(mem_storage, tmp_bucket, merged_bucket, n_workers, worker_index)
+    if worker_index == 0:
+        mem_storage.clear()
+    mem_storage.client.set("key", 3)
+    print(mem_storage.client.get("key"))
 
     # download file from s3
     local_dir = "/tmp"
     read_start = time.time()
-    storage.download(data_bucket, train_file, os.path.join(local_dir, train_file))
-    storage.download(data_bucket, test_file, os.path.join(local_dir, test_file))
+    s3_storage.download(data_bucket, train_file, os.path.join(local_dir, train_file))
+    s3_storage.download(data_bucket, test_file, os.path.join(local_dir, test_file))
     print("download file from s3 cost {} s".format(time.time() - read_start))
 
     train_set = torch.load(os.path.join(local_dir, train_file))
@@ -102,7 +113,7 @@ def handler(event, context):
     # load checkpoint model if it is not the first round
     if start_epoch != 0:
         checked_file = 'checkpoint_{}.pt'.format(start_epoch - 1)
-        storage.download(cp_bucket, checked_file, os.path.join(local_dir, checked_file))
+        s3_storage.download(cp_bucket, checked_file, os.path.join(local_dir, checked_file))
         checkpoint_model = torch.load(os.path.join(local_dir, checked_file))
 
         net.load_state_dict(checkpoint_model['model_state_dict'])
@@ -122,8 +133,7 @@ def handler(event, context):
               'test acc: {}.'.format(test_acc), )
 
     if worker_index == 0:
-        storage.clear(tmp_bucket)
-        storage.clear(merged_bucket)
+        mem_storage.clear()
 
     # training is not finished yet, invoke next round
     if epoch < n_epochs - 1:
@@ -138,7 +148,7 @@ def handler(event, context):
 
         if worker_index == 0:
             torch.save(checkpoint_model, os.path.join(local_dir, checked_file))
-            storage.upload_file(cp_bucket, checked_file, os.path.join(local_dir, checked_file))
+            s3_storage.upload(cp_bucket, checked_file, os.path.join(local_dir, checked_file))
             print("checkpoint model at epoch {} saved!".format(epoch))
 
         print("Invoking the next round of functions. round: {}/{}, start epoch: {}, run epoch: {}"
@@ -153,6 +163,8 @@ def handler(event, context):
             'n_classes': event['n_classes'],
             'n_workers': event['n_workers'],
             'worker_index': event['worker_index'],
+            'host': event['host'],
+            'port': event['port'],
             'tmp_bucket': event['tmp_bucket'],
             'merged_bucket': event['merged_bucket'],
             'cp_bucket': event['cp_bucket'],
@@ -183,7 +195,7 @@ def handler(event, context):
 # Train
 def train_one_epoch(epoch, net, train_loader, optimizer, worker_index,
                     communicator, optim, sync_mode):
-    assert isinstance(communicator, S3Communicator)
+    assert isinstance(communicator, MemcachedCommunicator)
     net.train()
 
     epoch_start = time.time()
@@ -211,11 +223,10 @@ def train_one_epoch(epoch, net, train_loader, optimizer, worker_index,
                 epoch_cal_time += batch_cal_time
 
                 batch_comm_start = time.time()
-                postfix = "{}_{}".format(epoch, batch_idx)
                 if sync_mode == "reduce":
-                    merged_grads = communicator.reduce_batch_nn(pickle.dumps(grads), postfix)
+                    merged_grads = communicator.reduce_batch_nn(pickle.dumps(grads), epoch, batch_idx)
                 elif sync_mode == "reduce_scatter":
-                    merged_grads = communicator.reduce_batch_nn(pickle.dumps(grads), postfix)
+                    merged_grads = communicator.reduce_batch_nn(pickle.dumps(grads), epoch, batch_idx)
 
                 for layer_index, param in enumerate(net.parameters()):
                     param.grad.data = torch.from_numpy(merged_grads[layer_index])
@@ -261,12 +272,11 @@ def train_one_epoch(epoch, net, train_loader, optimizer, worker_index,
         epoch_cal_time += time.time() - epoch_start
 
         epoch_sync_start = time.time()
-        postfix = str(epoch)
 
         if sync_mode == "reduce":
-            merged_weights = communicator.reduce_epoch_nn(pickle.dumps(weights), postfix)
+            merged_weights = communicator.reduce_epoch_nn(pickle.dumps(weights), epoch)
         elif sync_mode == "reduce_scatter":
-            merged_weights = communicator.reduce_epoch_nn(pickle.dumps(weights), postfix)
+            merged_weights = communicator.reduce_epoch_nn(pickle.dumps(weights), epoch)
         elif sync_mode == "async":
             merged_weights = communicator.async_reduce_nn(pickle.dumps(weights), Prefix.w_b_prefix)
 

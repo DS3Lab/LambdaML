@@ -2,7 +2,7 @@ import boto3
 import json
 import time
 
-from storage.s3 import s3_operator
+from storage.memcached import memcached_operator
 from storage import DynamoTable
 from storage.dynamo import dynamo_operator
 
@@ -22,6 +22,8 @@ def handler(event, context):
     data_bucket = "cifar10dataset"
     n_features = 32 * 32
     n_classes = 10
+    host = "127.0.0.1"
+    port = 11211
     tmp_bucket = "tmp-params"
     merged_bucket = "merged-params"
     cp_bucket = "cp-model"
@@ -35,8 +37,6 @@ def handler(event, context):
     # tuner configs
     tuner_strategy = "random_search"
     tuner_concurrency = 5
-    lr_lower = 0.01
-    lr_upper = 0.1
     lr_values = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
     lr_disc = DiscHyper("lr_discrete", lr_values)
 
@@ -46,17 +46,44 @@ def handler(event, context):
     start_epoch = 0
     run_epochs = 3
 
-    # clear s3 bucket
-    s3_client = s3_operator.get_client()
-    s3_operator.clear_bucket(s3_client, tmp_bucket)
-    s3_operator.clear_bucket(s3_client, merged_bucket)
-
     # set dynamodb table
     recorder_table_name = "recoder"
     dynamo_client = dynamo_operator.get_client()
     recorder_tb = DynamoTable(dynamo_client, recorder_table_name)
     items = recorder_tb.list()
     print("{} items in the recorder".format(len(items)))
+
+    # lambda payload
+    payload = dict()
+    payload['dataset'] = dataset_name
+    payload['data_bucket'] = data_bucket
+    payload['n_features'] = n_features
+    payload['n_classes'] = n_classes
+    payload['n_workers'] = n_workers
+    payload['host'] = host
+    payload['port'] = port
+    payload['tmp_bucket'] = tmp_bucket
+    payload['merged_bucket'] = merged_bucket
+    payload['cp_bucket'] = cp_bucket
+    payload['model'] = model
+    payload['optim'] = optim
+    payload['sync_mode'] = sync_mode
+    payload['lr'] = lr
+    payload['batch_size'] = batch_size
+    payload['n_epochs'] = n_epochs
+    payload['start_epoch'] = start_epoch
+    payload['run_epochs'] = run_epochs
+    payload['function_name'] = function_name
+
+    # invoke functions
+    lambda_client = boto3.client('lambda')
+    for i in range(n_workers):
+        payload['worker_index'] = i
+        payload['train_file'] = 'training_{}.pt'.format(i)
+        payload['test_file'] = 'test.pt'
+        lambda_client.invoke(FunctionName=function_name,
+                             InvocationType='Event',
+                             Payload=json.dumps(payload))
 
     # invoke functions
     lambda_client = boto3.client('lambda')
@@ -72,20 +99,24 @@ def handler(event, context):
             n_recorder_items = len(recorder_tb.list())
             n_running_tail = trial_counter - n_recorder_items
         for j in range(n_workers):
+            # lambda payload
             payload = dict()
             payload['dataset'] = dataset_name
             payload['data_bucket'] = data_bucket
             payload['n_features'] = n_features
             payload['n_classes'] = n_classes
             payload['n_workers'] = n_workers
+            payload['host'] = host
+            payload['port'] = port
             payload['model'] = model
             payload['optim'] = optim
             payload['sync_mode'] = sync_mode
+            payload['lr'] = lr
             payload['batch_size'] = batch_size
             payload['n_epochs'] = n_epochs
             payload['start_epoch'] = start_epoch
             payload['run_epochs'] = run_epochs
-            payload['function_name'] = trial_function_name
+            payload['function_name'] = function_name
 
             payload['tmp_bucket'] = tmp_bucket + "-i"
             payload['merged_bucket'] = merged_bucket + "-i"
