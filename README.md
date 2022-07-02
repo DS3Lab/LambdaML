@@ -1,21 +1,22 @@
-# LambdaML
 
-LambdaML is a machine learning system built in serverless infrastructure (Amazon AWS Lambda).
+# $\lambda$-ML
+
+$\lambda$-ML is a machine learning system built in serverless infrastructure (Amazon AWS Lambda).
 Serverless compute service lets you run code without provisioning or managing servers, creating workload-aware cluster scaling logic, maintaining event integrations, or managing runtimes. 
 Different from VM-based cloud compute, compute instances in serverless infrastructure cannot communicate with each other.
-To solve this problem, LambdaML implements various communication patterns using external storage.
+To solve this problem, $\lambda$-ML implements various communication patterns using external storage.
 
 
 ## Video Tutorials
 
 We provide several video tutorials on YouTube.
 
-- [Introduction to LambdaML](https://youtu.be/yUzzdp4IY7k)
+- [Introduction to $\lambda$-ML](https://youtu.be/yUzzdp4IY7k)
 - [Programming Interface](https://youtu.be/YU0974fViSU)
-- [Deploying LambdaML with S3](https://youtu.be/E_kzXTm32EM)
-- [Deploying LambdaML with ElastiCache](https://youtu.be/58PMo2N8rxA)
-- [Deploying LambdaML with DynamoDB](https://youtu.be/mWa3NpCcEDU)
-- [Deploying LambdaML with Hybrid Parameter Server](https://youtu.be/gjmEV0RCaak)
+- [Deploying $\lambda$-ML with S3](https://youtu.be/E_kzXTm32EM)
+- [Deploying $\lambda$-ML with ElastiCache](https://youtu.be/58PMo2N8rxA)
+- [Deploying $\lambda$-ML with DynamoDB](https://youtu.be/mWa3NpCcEDU)
+- [Deploying $\lambda$-ML with Hybrid Parameter Server](https://youtu.be/gjmEV0RCaak)
 
 
 ## Dependencies
@@ -36,7 +37,7 @@ We provide several video tutorials on YouTube.
 
 ## Programming Interface
 
-LambdaML leverages external storage services, e.g., S3, Elasticache, and DynamoDB, to implement communication between serverless compute instances.
+$\lambda$-ML leverages external storage services, e.g., S3, Elasticache, and DynamoDB, to implement communication between serverless compute instances.
 We provide both storage interfaces and communication primitives.
 
 ### Storage
@@ -57,14 +58,14 @@ The communication layer provides popular communication primitives.
 
 ### Hybrid framework.
 
-In addition to storage services, LambdaML also implements a hybrid architecture ---
+In addition to storage services, $\lambda$-ML also implements a hybrid architecture ---
 one VM acts as a parameter server and serverless instances communicate with the VM.
 - Launch parameter server. see [thrift_ps/start_service.py](thrift_ps/start_service.py)
 - Communication interfaces: ping/register/pull/push/delete.
 
 ## Usage
 
-The general usage of LambdaML:
+The general usage of $\lambda$-ML:
 1. Partition the dataset and upload to S3.
 2. Create a trigger Lambda function and an execution Lambda function.
 3. Set configurations (e.g., dataset location) and hyperparameters (e.g., learning rate).
