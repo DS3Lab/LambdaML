@@ -3,16 +3,14 @@ import time
 import math
 
 import numpy as np
-import pickle
 import json
 
 import torch
-from torch.autograd import Variable
 import torch.nn.functional as F
 
 import boto3
 
-from utils.constants import Prefix, MLModel, Optimization, Synchronization
+from utils.constants import MLModel, Optimization, Synchronization
 from storage import S3Storage
 from communicator import S3Communicator
 
@@ -81,7 +79,6 @@ def handler(event, context):
     test_set = torch.load(os.path.join(local_dir, test_file))
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=100, shuffle=False)
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     print("read data cost {} s".format(time.time() - read_start))
 
@@ -108,8 +105,8 @@ def handler(event, context):
 
     for epoch in range(start_epoch, min(start_epoch + run_epochs, n_epochs)):
 
-        train_loss, train_acc = train_one_epoch(epoch, net, train_loader, optimizer, worker_index,
-                                                communicator, optim, sync_mode)
+        train_loss, train_acc = train_one_epoch(epoch, net, train_loader, optimizer, worker_index, n_workers,
+                                                communicator, sync_mode)
         test_loss, test_acc = test(epoch, net, test_loader)
 
         print('Epoch: {}/{},'.format(epoch + 1, n_epochs),
@@ -172,8 +169,8 @@ def handler(event, context):
 
 
 # Train
-def train_one_epoch(epoch, net, train_loader, optimizer, worker_index,
-                    communicator, optim, sync_mode):
+def train_one_epoch(epoch, net, train_loader, optimizer, worker_index, n_workers,
+                    communicator, sync_mode):
     assert isinstance(communicator, S3Communicator)
     net.train()
 
@@ -185,6 +182,17 @@ def train_one_epoch(epoch, net, train_loader, optimizer, worker_index,
     train_acc = Accuracy()
     train_loss = Average()
 
+    # record the architecture of the network
+    grads_shape = []
+    grads_length = []
+    for param in net.parameters():
+        grads_shape.append(param.data.numpy().shape)
+        l = 1
+        for i in param.data.numpy().shape:
+            l *= i
+        grads_length.append(l)
+        grad_dtype = param.data.numpy().dtype
+
     for batch_idx, (inputs, targets) in enumerate(train_loader):
         batch_start = time.time()
         outputs = net(inputs)
@@ -192,52 +200,36 @@ def train_one_epoch(epoch, net, train_loader, optimizer, worker_index,
 
         optimizer.zero_grad()
         loss.backward()
+
+        # flatten the gradient into a 1-d numpy array
+        grads_vector = np.empty(sum(grads_length), dtype=grad_dtype)
+        curr = 0
+        for i, param in enumerate(net.parameters()):
+            grads_vector[curr:curr+grads_length[i]] = np.ravel(param.grad.data.numpy())
+            curr += grads_length[i]
+
         batch_cal_time = time.time() - batch_start
-        batch_comm_time = 0
+        epoch_cal_time += batch_cal_time
 
-        if optim == "grad_avg":
-            if sync_mode == "reduce" or sync_mode == "reduce_scatter":
-                grads = [param.grad.data.numpy() for param in net.parameters()]
-                batch_cal_time = time.time() - batch_start
-                epoch_cal_time += batch_cal_time
+        batch_comm_start = time.time()
+        postfix = "{}_{}".format(epoch, batch_idx)
+        if sync_mode == "reduce":
+            merged_grads_vec = communicator.reduce_batch(grads_vector, postfix)
+        elif sync_mode == "reduce_scatter":
+            merged_grads_vec = communicator.reduce_scatter_batch(grads_vector, postfix)
+        else:
+            raise ValueError("Synchronization mode has to be either reduce or reduce_scatter")
 
-                batch_comm_start = time.time()
-                postfix = "{}_{}".format(epoch, batch_idx)
-                if sync_mode == "reduce":
-                    merged_grads = communicator.reduce_batch_nn(pickle.dumps(grads), postfix)
-                elif sync_mode == "reduce_scatter":
-                    # NOTE(milos) I think this should be reduce_scatter_batch_nn, but this is not in s3_comm
-                    merged_grads = communicator.reduce_batch_nn(pickle.dumps(grads), postfix)
+        # reconstruct the gradient from the 1-d vector
+        curr = 0
+        for i, param in enumerate(net.parameters()):
+            curr_grad = merged_grads_vec[curr:curr+grads_length[i]].reshape(grads_shape[i]) / n_workers
+            param.grad.data = torch.from_numpy(curr_grad)
+            curr += grads_length[i]
 
-                for layer_index, param in enumerate(net.parameters()):
-                    param.grad.data = torch.from_numpy(merged_grads[layer_index])
-
-                batch_comm_time = time.time() - batch_comm_start
-                print("one {} round cost {} s".format(sync_mode, batch_comm_time))
-                epoch_comm_time += batch_comm_time
-            elif sync_mode == "async":
-                # async does step before sync
-                optimizer.step()
-                batch_cal_time = time.time() - batch_start
-                epoch_cal_time += batch_cal_time
-
-                batch_comm_start = time.time()
-                weights = [param.data.numpy() for param in net.parameters()]
-                new_weights = communicator.async_reduce_nn(pickle.dumps(weights), Prefix.w_b_prefix)
-
-                for layer_index, param in enumerate(net.parameters()):
-                    param.data = torch.from_numpy(new_weights[layer_index])
-
-                batch_comm_time = time.time() - batch_comm_start
-                print("one {} round cost {} s".format(sync_mode, batch_comm_time))
-                epoch_comm_time += batch_comm_time
-
-        # async does step before sync
-        if sync_mode != "async":
-            step_start = time.time()
-            optimizer.step()
-            batch_cal_time += time.time() - step_start
-            epoch_cal_time += batch_cal_time
+        batch_comm_time = time.time() - batch_comm_start
+        print("one {} round cost {} s".format(sync_mode, batch_comm_time))
+        epoch_comm_time += batch_comm_time
 
         train_acc.update(outputs, targets)
         train_loss.update(loss.item(), inputs.size(0))
@@ -248,33 +240,9 @@ def train_one_epoch(epoch, net, train_loader, optimizer, worker_index,
                   .format(epoch + 1, batch_idx + 1, train_loss, train_acc, time.time() - batch_start,
                           batch_cal_time, batch_comm_time))
 
-    if optim == "model_avg":
-        weights = [param.data.numpy() for param in net.parameters()]
-        epoch_cal_time += time.time() - epoch_start
-
-        epoch_sync_start = time.time()
-        postfix = str(epoch)
-
-        if sync_mode == "reduce":
-            merged_weights = communicator.reduce_epoch_nn(pickle.dumps(weights), postfix)
-        elif sync_mode == "reduce_scatter":
-            merged_weights = communicator.reduce_epoch_nn(pickle.dumps(weights), postfix)
-        elif sync_mode == "async":
-            merged_weights = communicator.async_reduce_nn(pickle.dumps(weights), Prefix.w_b_prefix)
-
-        for layer_index, param in enumerate(net.parameters()):
-            param.data = torch.from_numpy(merged_weights[layer_index])
-
-        print("one {} round cost {} s".format(sync_mode, time.time() - epoch_sync_start))
-        epoch_comm_time += time.time() - epoch_sync_start
-
     if worker_index == 0:
         delete_start = time.time()
-        # model avg delete by epoch
-        if optim == "model_avg" and sync_mode != "async":
-            communicator.delete_expired_epoch(epoch)
-        elif optim == "grad_avg" and sync_mode != "async":
-            communicator.delete_expired_batch(epoch, batch_idx)
+        communicator.delete_expired_batch(epoch, batch_idx)
         epoch_comm_time += time.time() - delete_start
 
     print("Epoch {} has {} batches, cost {} s, cal time = {} s, comm time = {} s"
